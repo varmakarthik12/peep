@@ -58,7 +58,7 @@
   "homepage": "https://github.com/varmakarthik12/peep#readme",
   "dependencies": {
     "@modelcontextprotocol/sdk": "^1.6.1",
-    "commander": "^13.1.0",
+    "commander": "^15.0.0",
     "fast-xml-parser": "^5.0.8",
     "picocolors": "^1.1.1",
     "yaml": "^2.7.0",
