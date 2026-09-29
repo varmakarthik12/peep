@@ -12,14 +12,33 @@ export interface AdbDevice {
   product?: string;
 }
 
+export interface AdbClientOptions {
+  adbPath?: string;
+  deviceId?: string;
+  host?: string; // Remote ADB server host (-H <host>)
+  port?: number; // Remote ADB server port (-P <port>)
+  connectAddress?: string; // Remote device TCP address to connect (e.g. 192.168.1.100:5555)
+}
+
 export class AdbClient {
   private adbPath: string;
   private selectedDeviceId?: string;
+  private host?: string;
+  private port?: number;
+  private connectAddress?: string;
   private activeProcesses = new Set<ChildProcess>();
 
-  constructor(adbPath = "adb", deviceId?: string) {
-    this.adbPath = adbPath;
-    this.selectedDeviceId = deviceId;
+  constructor(options: AdbClientOptions | string = "adb", deviceId?: string) {
+    if (typeof options === "string") {
+      this.adbPath = options;
+      this.selectedDeviceId = deviceId;
+    } else {
+      this.adbPath = options.adbPath || "adb";
+      this.selectedDeviceId = options.deviceId;
+      this.host = options.host;
+      this.port = options.port;
+      this.connectAddress = options.connectAddress;
+    }
   }
 
   getAdbPath(): string {
@@ -35,21 +54,62 @@ export class AdbClient {
   }
 
   private getBaseArgs(): string[] {
-    if (this.selectedDeviceId) {
-      return ["-s", this.selectedDeviceId];
+    const args: string[] = [];
+    if (this.host) {
+      args.push("-H", this.host);
     }
-    return [];
+    if (this.port) {
+      args.push("-P", String(this.port));
+    }
+    if (this.selectedDeviceId) {
+      args.push("-s", this.selectedDeviceId);
+    }
+    return args;
+  }
+
+  /**
+   * Connects to a remote network device via TCP/IP if connectAddress is specified.
+   */
+  async connectRemoteDevice(): Promise<void> {
+    if (!this.connectAddress) return;
+
+    const baseArgs: string[] = [];
+    if (this.host) baseArgs.push("-H", this.host);
+    if (this.port) baseArgs.push("-P", String(this.port));
+
+    try {
+      logger.info(`Connecting to remote ADB device at ${this.connectAddress}...`);
+      const { stdout } = await execFileAsync(this.adbPath, [...baseArgs, "connect", this.connectAddress], {
+        timeout: 10000,
+      });
+      logger.debug(`ADB connect output: ${stdout.trim()}`);
+      if (!this.selectedDeviceId) {
+        this.selectedDeviceId = this.connectAddress;
+      }
+    } catch (err) {
+      logger.warn(`Failed to connect to remote device ${this.connectAddress}:`, err);
+    }
   }
 
   async listDevices(): Promise<AdbDevice[]> {
+    if (this.connectAddress && !this.selectedDeviceId) {
+      await this.connectRemoteDevice();
+    }
+
     try {
-      const { stdout } = await execFileAsync(this.adbPath, ["devices", "-l"]);
+      const baseArgs: string[] = [];
+      if (this.host) baseArgs.push("-H", this.host);
+      if (this.port) baseArgs.push("-P", String(this.port));
+
+      const { stdout } = await execFileAsync(this.adbPath, [...baseArgs, "devices", "-l"], {
+        timeout: 10000,
+      });
       const lines = stdout.split(/\r?\n/);
       const devices: AdbDevice[] = [];
 
       for (const line of lines) {
         const trimmed = line.trim();
-        if (!trimmed || trimmed.startsWith("List of devices") || trimmed.startsWith("*")) continue;
+        if (!trimmed || trimmed.startsWith("List of devices")) continue;
 
         const parts = trimmed.split(/\s+/);
         if (parts.length >= 2) {
@@ -78,12 +138,19 @@ export class AdbClient {
       return this.selectedDeviceId;
     }
 
+    if (this.connectAddress) {
+      await this.connectRemoteDevice();
+      if (this.selectedDeviceId) return this.selectedDeviceId;
+    }
+
     const devices = await this.listDevices();
     const online = devices.filter((d) => d.status === "device");
 
     if (online.length === 0) {
       throw new Error(
-        "No online Android device/emulator found via ADB. Ensure your device is connected with USB Debugging enabled or start an emulator."
+        `No online Android device/emulator found via ADB${
+          this.host ? ` at ${this.host}:${this.port || 5037}` : ""
+        }. Ensure your device is connected with USB Debugging enabled or check your remote connection.`
       );
     }
 
@@ -113,34 +180,30 @@ export class AdbClient {
     const fullArgs = [...this.getBaseArgs(), ...args];
 
     return new Promise((resolve, reject) => {
-      let settled = false;
       const proc = spawn(this.adbPath, fullArgs);
       this.activeProcesses.add(proc);
+
+      const chunks: Buffer[] = [];
+      const errChunks: Buffer[] = [];
+      let settled = false;
 
       const timer = setTimeout(() => {
         if (!settled) {
           settled = true;
           this.activeProcesses.delete(proc);
-          try {
-            proc.kill("SIGKILL");
-          } catch {
-            // ignore
-          }
-          reject(new Error(`ADB execRaw timed out after ${timeoutMs}ms [${fullArgs.join(" ")}]`));
+          proc.kill("SIGKILL");
+          reject(new Error(`ADB command timed out after ${timeoutMs}ms [${fullArgs.join(" ")}]`));
         }
       }, timeoutMs);
-
-      const chunks: Buffer[] = [];
-      const errChunks: Buffer[] = [];
 
       proc.stdout.on("data", (chunk: Buffer) => chunks.push(chunk));
       proc.stderr.on("data", (chunk: Buffer) => errChunks.push(chunk));
 
       proc.on("close", (code) => {
-        clearTimeout(timer);
-        this.activeProcesses.delete(proc);
         if (settled) return;
         settled = true;
+        clearTimeout(timer);
+        this.activeProcesses.delete(proc);
 
         if (code === 0) {
           resolve(Buffer.concat(chunks));
@@ -151,10 +214,10 @@ export class AdbClient {
       });
 
       proc.on("error", (err) => {
-        clearTimeout(timer);
-        this.activeProcesses.delete(proc);
         if (settled) return;
         settled = true;
+        clearTimeout(timer);
+        this.activeProcesses.delete(proc);
         reject(err);
       });
     });
@@ -162,9 +225,6 @@ export class AdbClient {
 
   async getDisplayMetrics(): Promise<DisplayMetrics> {
     const sizeOutput = await this.shell(["wm", "size"]);
-    // Output looks like:
-    // Physical size: 1080x2400
-    // Override size: 1080x2400 (if set)
     let width = 1080;
     let height = 2400;
 
@@ -179,18 +239,15 @@ export class AdbClient {
       height = parseInt(physicalMatch[2], 10);
     }
 
-    // Get orientation
     let rotation: 0 | 90 | 180 | 270 = 0;
     try {
       const rotOutput = await this.shell(["dumpsys", "display"]);
-      const rotMatch =
-        rotOutput.match(/(?:mCurrentRotation|mRotation|mDisplayRotation)=(?:ROTATION_)?(\d+)/i) ||
-        rotOutput.match(/\bROTATION_(0|90|180|270)\b/i);
+      const rotMatch = rotOutput.match(/mCurrentRotation=(\d)/);
       if (rotMatch) {
         const val = parseInt(rotMatch[1], 10);
-        if (val === 1 || val === 90) rotation = 90;
-        else if (val === 2 || val === 180) rotation = 180;
-        else if (val === 3 || val === 270) rotation = 270;
+        if (val === 1) rotation = 90;
+        else if (val === 2) rotation = 180;
+        else if (val === 3) rotation = 270;
       }
     } catch {
       // default 0
@@ -202,7 +259,7 @@ export class AdbClient {
   async close(): Promise<void> {
     for (const proc of this.activeProcesses) {
       try {
-        proc.kill("SIGTERM");
+        proc.kill("SIGKILL");
       } catch {
         // ignore
       }

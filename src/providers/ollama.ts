@@ -11,10 +11,12 @@ import { logger } from "../utils/logger.js";
 export class OllamaProvider extends BaseInferenceProvider {
   readonly name = "ollama";
   private baseUrl: string;
-  private vlmModel: string;
-  private slmModel: string;
+  private model: string;
+  private visionModel: string;
+  private textModel: string;
   private timeoutMs: number;
   private temperature: number;
+  private autoDetected = false;
 
   constructor(config: InferenceProviderConfig) {
     super();
@@ -23,10 +25,39 @@ export class OllamaProvider extends BaseInferenceProvider {
       url = url.slice(0, -3);
     }
     this.baseUrl = url;
-    this.vlmModel = config.vlmModel;
-    this.slmModel = config.slmModel;
+    this.model = config.model || "auto";
+    this.visionModel = config.visionModel || this.model;
+    this.textModel = config.textModel || this.model;
     this.timeoutMs = config.timeoutMs;
     this.temperature = config.temperature;
+  }
+
+  private async ensureModel(): Promise<void> {
+    if (this.autoDetected || (this.visionModel !== "auto" && this.textModel !== "auto")) {
+      return;
+    }
+
+    try {
+      const res = await fetch(`${this.baseUrl}/api/tags`, {
+        method: "GET",
+        signal: AbortSignal.timeout(5000),
+      });
+
+      if (res.ok) {
+        const data = (await res.json()) as { models?: Array<{ name: string }> };
+        if (data.models && data.models.length > 0) {
+          const detected = data.models[0].name;
+          if (this.visionModel === "auto") this.visionModel = detected;
+          if (this.textModel === "auto") this.textModel = detected;
+          if (this.model === "auto") this.model = detected;
+          this.autoDetected = true;
+          logger.debug(`Auto-detected Ollama model: ${detected}`);
+        }
+      }
+    } catch {
+      if (this.visionModel === "auto") this.visionModel = "default";
+      if (this.textModel === "auto") this.textModel = "default";
+    }
   }
 
   async checkHealth(): Promise<{
@@ -38,32 +69,35 @@ export class OllamaProvider extends BaseInferenceProvider {
   }> {
     const start = Date.now();
     try {
+      await this.ensureModel();
       const res = await fetch(`${this.baseUrl}/api/tags`, {
         method: "GET",
         signal: AbortSignal.timeout(5000),
       });
 
+      const latencyMs = Date.now() - start;
+
       if (!res.ok) {
         return {
           ok: false,
-          vlmModel: this.vlmModel,
-          slmModel: this.slmModel,
-          latencyMs: Date.now() - start,
+          vlmModel: this.visionModel,
+          slmModel: this.textModel,
+          latencyMs,
           error: `HTTP ${res.status}: ${res.statusText}`,
         };
       }
 
       return {
         ok: true,
-        vlmModel: this.vlmModel,
-        slmModel: this.slmModel,
-        latencyMs: Date.now() - start,
+        vlmModel: this.visionModel,
+        slmModel: this.textModel,
+        latencyMs,
       };
     } catch (err) {
       return {
         ok: false,
-        vlmModel: this.vlmModel,
-        slmModel: this.slmModel,
+        vlmModel: this.visionModel,
+        slmModel: this.textModel,
         latencyMs: Date.now() - start,
         error: err instanceof Error ? err.message : String(err),
       };
@@ -74,8 +108,11 @@ export class OllamaProvider extends BaseInferenceProvider {
     model: string,
     messages: Array<{ role: string; content: string; images?: string[] }>
   ): Promise<string> {
+    await this.ensureModel();
+    const effectiveModel = model === "auto" ? this.model : model;
+
     const payload = {
-      model,
+      model: effectiveModel,
       messages,
       format: "json",
       stream: false,
@@ -121,7 +158,7 @@ Output strict JSON with normalized coordinates between 0 and 1000 for click poin
 }`;
 
     try {
-      const content = await this.callOllamaChat(this.vlmModel, [
+      const content = await this.callOllamaChat(this.visionModel, [
         {
           role: "user",
           content: prompt,
@@ -129,15 +166,20 @@ Output strict JSON with normalized coordinates between 0 and 1000 for click poin
         },
       ]);
 
-      const parsed = this.cleanAndParseJson(content);
+      const parsed = this.cleanAndParseJson(content) as {
+        found?: boolean;
+        thought?: string;
+        point?: unknown;
+        confidence?: number;
+      } | null;
 
       if (parsed) {
         const point = this.parseNormalizedPoint(parsed.point);
         return {
-          found: Boolean((parsed.found ?? true) && point),
+          found: parsed.found ?? Boolean(point),
           point,
-          confidence: typeof parsed.confidence === "number" ? parsed.confidence : 0.9,
-          thought: typeof parsed.thought === "string" ? parsed.thought : undefined,
+          confidence: parsed.confidence ?? 0.9,
+          thought: parsed.thought,
         };
       }
     } catch (err) {
@@ -160,28 +202,28 @@ Output JSON:
 }`;
 
     try {
-      const content = await this.callOllamaChat(this.vlmModel, [
+      const content = await this.callOllamaChat(this.visionModel, [
         {
           role: "user",
           content: prompt,
           images: [imageBase64],
         },
       ]);
-      const parsed = this.cleanAndParseJson(content);
+      const parsed = this.cleanAndParseJson(content) as {
+        passed?: boolean;
+        confidence?: number;
+        explanation?: string;
+      } | null;
 
-      if (parsed) {
-        return {
-          passed: Boolean(parsed.passed),
-          confidence: typeof parsed.confidence === "number" ? parsed.confidence : 0.85,
-          explanation: typeof parsed.explanation === "string" ? parsed.explanation : "",
-        };
-      }
+      return {
+        passed: Boolean(parsed?.passed),
+        confidence: parsed?.confidence ?? 0.85,
+        explanation: parsed?.explanation ?? "",
+      };
     } catch (err) {
       logger.warn("Ollama assertion error:", err);
       return { passed: false, confidence: 0, explanation: String(err) };
     }
-
-    return { passed: false, confidence: 0, explanation: "Failed to evaluate assertion." };
   }
 
   async summarizeLogAnomalies(rawLogs: string[]): Promise<LogSummaryResult> {
@@ -201,24 +243,25 @@ Output JSON:
 }`;
 
     try {
-      const content = await this.callOllamaChat(this.slmModel || this.vlmModel, [
+      const content = await this.callOllamaChat(this.textModel, [
         { role: "user", content: prompt },
       ]);
-      const parsed = this.cleanAndParseJson(content);
+      const parsed = this.cleanAndParseJson(content) as {
+        hasFatalError?: boolean;
+        summary?: string;
+        culprit?: string;
+        stackSnippet?: string;
+      } | null;
 
-      if (parsed) {
-        return {
-          hasFatalError: Boolean(parsed.hasFatalError),
-          summary: typeof parsed.summary === "string" ? parsed.summary : "Clean logs.",
-          culprit: parsed.culprit ? String(parsed.culprit) : undefined,
-          stackSnippet: parsed.stackSnippet ? String(parsed.stackSnippet) : undefined,
-        };
-      }
+      return {
+        hasFatalError: Boolean(parsed?.hasFatalError),
+        summary: parsed?.summary ?? "Clean logs.",
+        culprit: parsed?.culprit,
+        stackSnippet: parsed?.stackSnippet,
+      };
     } catch (err) {
       return { hasFatalError: false, summary: "Failed to parse logs with local model." };
     }
-
-    return { hasFatalError: false, summary: "Clean logs." };
   }
 
   async decideNextAction(
@@ -239,26 +282,30 @@ Output next action JSON:
 }`;
 
     try {
-      const content = await this.callOllamaChat(this.vlmModel, [
+      const content = await this.callOllamaChat(this.visionModel, [
         { role: "user", content: prompt, images: [imageBase64] },
       ]);
-      const parsed = this.cleanAndParseJson(content);
+      const parsed = this.cleanAndParseJson(content) as {
+        thought?: string;
+        action?: MacroActionStep["action"];
+        point?: unknown;
+        text?: string;
+        direction?: MacroActionStep["direction"];
+        key?: string;
+      } | null;
 
-      if (parsed) {
-        const point = this.parseNormalizedPoint(parsed.point);
-        return {
-          thought: typeof parsed.thought === "string" ? parsed.thought : "",
-          action: (parsed.action as MacroActionStep["action"]) || "fail",
-          point,
-          text: parsed.text ? String(parsed.text) : undefined,
-          direction: parsed.direction as MacroActionStep["direction"],
-          key: parsed.key ? String(parsed.key) : undefined,
-        };
-      }
+      const point = this.parseNormalizedPoint(parsed?.point);
+
+      return {
+        thought: parsed?.thought || "",
+        action: parsed?.action || "fail",
+        point,
+        text: parsed?.text,
+        direction: parsed?.direction,
+        key: parsed?.key,
+      };
     } catch (err) {
       return { thought: "Ollama action parsing failed", action: "fail" };
     }
-
-    return { thought: "Failed to determine next action", action: "fail" };
   }
 }

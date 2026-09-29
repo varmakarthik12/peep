@@ -1,7 +1,7 @@
 import { BaseTarget, SemanticElement, ScreenFrame } from "../base.js";
 import { DisplayMetrics } from "../../core/coordinate-mapper.js";
 import { SwipeCoordinates, GestureEngine } from "../../core/gesture-engine.js";
-import { AdbClient } from "./adb-client.js";
+import { AdbClient, AdbClientOptions } from "./adb-client.js";
 import { ScreenCapture } from "./screencap.js";
 import { UiHierarchyParser } from "./ui-hierarchy.js";
 import { LogcatTailer } from "./logcat-tailer.js";
@@ -19,7 +19,16 @@ export class AndroidTarget extends BaseTarget {
 
   constructor(targetConfig: TargetConfig, logsConfig: LogsConfig) {
     super();
-    this.adb = new AdbClient(targetConfig.adbPath, targetConfig.deviceId);
+    const androidConfig = targetConfig.android || {};
+    const options: AdbClientOptions = {
+      adbPath: androidConfig.adbPath || targetConfig.adbPath || "adb",
+      deviceId: androidConfig.deviceId || targetConfig.deviceId,
+      host: androidConfig.adbHost,
+      port: androidConfig.adbPort,
+      connectAddress: androidConfig.connectAddress,
+    };
+
+    this.adb = new AdbClient(options);
     this.capture = new ScreenCapture(this.adb);
     this.hierarchy = new UiHierarchyParser(this.adb);
     this.logcat = new LogcatTailer(
@@ -40,23 +49,15 @@ export class AndroidTarget extends BaseTarget {
     await this.logcat.start();
   }
 
-  async getDisplayMetrics(forceRefresh = false): Promise<DisplayMetrics> {
-    if (!this.metrics || forceRefresh) {
+  async getDisplayMetrics(): Promise<DisplayMetrics> {
+    if (!this.metrics) {
       this.metrics = await this.adb.getDisplayMetrics();
     }
     return this.metrics;
   }
 
   async captureScreenshot(): Promise<ScreenFrame> {
-    const frame = await this.capture.capture();
-    if (this.metrics && (this.metrics.width !== frame.width || this.metrics.height !== frame.height)) {
-      this.metrics = {
-        ...this.metrics,
-        width: frame.width,
-        height: frame.height,
-      };
-    }
-    return frame;
+    return this.capture.capture();
   }
 
   async getSemanticHierarchy(): Promise<SemanticElement[]> {

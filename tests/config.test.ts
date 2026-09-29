@@ -35,14 +35,15 @@ describe("Configuration & Schema Validation", () => {
 
       expect(config.logLevel).toBe("info");
       expect(config.provider.type).toBe("openai");
-      expect(config.provider.baseUrl).toBe("http://localhost:11434/v1");
-      expect(config.provider.vlmModel).toBe("qwen2.5-vl:7b");
-      expect(config.provider.slmModel).toBe("gemma:2b");
+      expect(config.provider.model).toBe("auto");
+      expect(config.provider.visionModel).toBe("auto");
+      expect(config.provider.textModel).toBe("auto");
       expect(config.provider.timeoutMs).toBe(45000);
       expect(config.provider.temperature).toBe(0.1);
 
       expect(config.target.type).toBe("android");
-      expect(config.target.adbPath).toBe("adb");
+      expect(config.target.defaultPlatform).toBe("android");
+      expect(config.target.enabled).toEqual(["android", "browser", "desktop"]);
 
       expect(config.perception.strategy).toBe("auto");
       expect(config.perception.confidenceThreshold).toBe(0.7);

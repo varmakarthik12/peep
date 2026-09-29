@@ -1,35 +1,43 @@
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { z } from "zod";
-import { BaseTarget, AndroidTarget } from "../targets/index.js";
+import { BaseTarget, AndroidTarget, TargetManager } from "../targets/index.js";
 import { BaseInferenceProvider } from "../providers/index.js";
 import { CoordinateMapper } from "../core/coordinate-mapper.js";
-import { GestureEngine } from "../core/gesture-engine.js";
+import { GestureEngine, SwipeDirection } from "../core/gesture-engine.js";
 import { MacroRunner } from "../core/macro-runner.js";
 import { tokenShield } from "../core/token-shield.js";
+import { TargetPlatform } from "../config/schema.js";
 import { logger } from "../utils/logger.js";
 
 export function registerTools(
   server: McpServer,
-  target: BaseTarget,
+  targetOrManager: BaseTarget | TargetManager,
   provider: BaseInferenceProvider,
   mapper: CoordinateMapper
 ): void {
-  const macroRunner = new MacroRunner(provider, target, mapper);
+  const getTarget = (platform?: TargetPlatform): BaseTarget => {
+    if (targetOrManager instanceof TargetManager) {
+      return targetOrManager.getTarget(platform);
+    }
+    return targetOrManager;
+  };
 
   // 1. peep_find_and_tap
   server.tool(
     "peep_find_and_tap",
-    "Locates a visual element on the device screen (via Tier 0 accessibility tree or Tier 2 local VLM) and executes a physical tap. Never returns raw screenshots to the cloud harness, saving 1600+ vision tokens.",
+    "Locates a visual element on the device/platform screen (via Tier 0 accessibility tree or Tier 2 local vision model) and executes a physical tap. Shields raw screenshots from cloud context, saving 1600+ vision tokens.",
     {
       target: z.string().describe("Semantic description or text of the element to tap (e.g. 'Submit button', 'Settings', 'Search input')"),
       strategy: z
         .enum(["auto", "tree_first", "vision_only", "tree_only"])
         .default("auto")
-        .describe("Perception strategy: 'auto' tries UI tree first then falls back to local VLM vision"),
+        .describe("Perception strategy: 'auto' tries UI tree first then falls back to local vision model"),
       context: z.string().optional().describe("Optional contextual hint (e.g. 'in the top right navigation bar')"),
+      platform: z.enum(["android", "browser", "desktop"]).optional().describe("Target platform (defaults to primary active target)"),
     },
-    async ({ target: targetDesc, strategy, context }) => {
-      logger.info(`[MCP:tap] Target: "${targetDesc}", Strategy: ${strategy}`);
+    async ({ target: targetDesc, strategy, context, platform }) => {
+      logger.info(`[MCP:tap] Target: "${targetDesc}", Strategy: ${strategy}, Platform: ${platform || "default"}`);
+      const target = getTarget(platform as TargetPlatform);
 
       // Tier 0/1: Try semantic tree if strategy allows
       if (strategy === "auto" || strategy === "tree_first" || strategy === "tree_only") {
@@ -82,7 +90,7 @@ export function registerTools(
         }
       }
 
-      // Tier 2: Local VLM visual grounding
+      // Tier 2: Local vision model visual grounding
       const frame = await target.captureScreenshot();
       const prompt = context ? `${targetDesc} (${context})` : targetDesc;
       const grounding = await provider.groundElement(prompt, frame.base64);
@@ -148,12 +156,13 @@ export function registerTools(
       text: z.string().describe("Text string to type"),
       target: z.string().optional().describe("Optional target field to tap and focus before typing"),
       clearFirst: z.boolean().default(false).describe("Whether to clear the field first"),
+      platform: z.enum(["android", "browser", "desktop"]).optional().describe("Target platform"),
     },
-    async ({ text, target: targetDesc, clearFirst }) => {
+    async ({ text, target: targetDesc, clearFirst, platform }) => {
       logger.info(`[MCP:type] Text: "${text}", Target: ${targetDesc || "(active focus)"}`);
+      const target = getTarget(platform as TargetPlatform);
 
       if (targetDesc) {
-        // Tap target to focus
         if (target instanceof AndroidTarget) {
           const el = await target.findSemanticElement(targetDesc);
           if (el) {
@@ -166,7 +175,6 @@ export function registerTools(
       }
 
       if (clearFirst) {
-        // Select all & backspace if needed
         for (let i = 0; i < 25; i++) {
           await target.pressKey("backspace");
         }
@@ -196,14 +204,16 @@ export function registerTools(
     {
       direction: z.enum(["up", "down", "left", "right"]).describe("Direction of swipe"),
       distance: z.enum(["short", "medium", "long"]).default("medium").describe("Distance of swipe"),
+      platform: z.enum(["android", "browser", "desktop"]).optional().describe("Target platform"),
     },
-    async ({ direction, distance }) => {
+    async ({ direction, distance, platform }) => {
       logger.info(`[MCP:swipe] Direction: ${direction}, Distance: ${distance}`);
+      const target = getTarget(platform as TargetPlatform);
       const metrics = await target.getDisplayMetrics();
       const coords = GestureEngine.calculateSwipe(
         metrics.width,
         metrics.height,
-        direction,
+        direction as SwipeDirection,
         distance
       );
       await target.swipe(coords);
@@ -231,9 +241,11 @@ export function registerTools(
     "Dispatches a hardware or navigation key event (e.g. 'back', 'home', 'enter', 'tab').",
     {
       key: z.string().describe("Key name: 'back', 'home', 'enter', 'tab', 'volume_up', 'volume_down'"),
+      platform: z.enum(["android", "browser", "desktop"]).optional().describe("Target platform"),
     },
-    async ({ key }) => {
+    async ({ key, platform }) => {
       logger.info(`[MCP:press] Key: ${key}`);
+      const target = getTarget(platform as TargetPlatform);
       await target.pressKey(key);
       return {
         content: [
@@ -249,12 +261,14 @@ export function registerTools(
   // 5. peep_assert_screen_state
   server.tool(
     "peep_assert_screen_state",
-    "Uses the local VLM to visually evaluate whether an expected condition is TRUE or FALSE on screen, returning confidence and explanation without cloud token burn.",
+    "Uses local vision model to visually evaluate whether an expected condition is TRUE or FALSE on screen, returning confidence and explanation without cloud token burn.",
     {
       expectedState: z.string().describe("Expected condition to verify (e.g. 'Order confirmation popup is visible', 'Error toast is shown')"),
+      platform: z.enum(["android", "browser", "desktop"]).optional().describe("Target platform"),
     },
-    async ({ expectedState }) => {
+    async ({ expectedState, platform }) => {
       logger.info(`[MCP:assert] Condition: "${expectedState}"`);
+      const target = getTarget(platform as TargetPlatform);
       const frame = await target.captureScreenshot();
       const res = await provider.assertCondition(expectedState, frame.base64);
       const saved = tokenShield.recordShieldedScreenshot(60);
@@ -284,14 +298,16 @@ export function registerTools(
   // 6. peep_tail_and_filter_logs
   server.tool(
     "peep_tail_and_filter_logs",
-    "Retrieves background buffered logs, strips framework noise, and runs local SLM anomaly detection to produce a 3-line diagnostic instead of flooding context with 30,000+ log tokens.",
+    "Retrieves background buffered logs, strips framework noise, and runs local model crash diagnosis to produce a 3-line diagnostic instead of flooding context with 30,000+ log tokens.",
     {
       filterPattern: z.string().optional().describe("Optional substring or regex filter"),
-      searchCrashes: z.boolean().default(true).describe("Whether to run local SLM crash diagnosis"),
+      searchCrashes: z.boolean().default(true).describe("Whether to run local model crash diagnosis"),
       limit: z.number().int().default(100).describe("Max lines to return"),
+      platform: z.enum(["android", "browser", "desktop"]).optional().describe("Target platform"),
     },
-    async ({ filterPattern, searchCrashes, limit }) => {
+    async ({ filterPattern, searchCrashes, limit, platform }) => {
       logger.info(`[MCP:logs] Filter: "${filterPattern || "*"}", CrashesOnly: ${searchCrashes}`);
+      const target = getTarget(platform as TargetPlatform);
       const rawLogs = await target.getRecentLogs(filterPattern);
       const linesCount = rawLogs.length;
 
@@ -302,7 +318,6 @@ export function registerTools(
 
       const saved = tokenShield.recordShieldedLogs(linesCount, 60);
 
-      const recentSample = rawLogs.slice(-Math.min(limit, 20));
       return {
         content: [
           {
@@ -310,14 +325,14 @@ export function registerTools(
             text: JSON.stringify(
               {
                 status: "SUCCESS",
-                rawLinesBuffered: linesCount,
                 bufferedCount: linesCount,
+                rawLinesBuffered: linesCount,
                 diagnosis: diagnosis || {
                   hasFatalError: false,
                   summary: "No crash search requested.",
                 },
-                recentSample,
-                sample: recentSample,
+                sample: rawLogs.slice(-Math.min(limit, 20)),
+                recentSample: rawLogs.slice(-Math.min(limit, 20)),
                 cloudTokensSaved: saved,
               },
               null,
@@ -332,14 +347,17 @@ export function registerTools(
   // 7. peep_execute_goal
   server.tool(
     "peep_execute_goal",
-    "Autonomous Local Micro-Loop: Hands a multi-step task to the local VLM to execute up to maxSteps actions locally. Shields all intermediate screen frames and only reports the final outcome.",
+    "Autonomous Local Micro-Loop: Hands a multi-step task to the local model to execute up to maxSteps actions locally. Shields all intermediate screen frames and only reports the final outcome.",
     {
       goal: z.string().describe("High-level task (e.g. 'Dismiss permission dialog and tap on Settings')"),
       maxSteps: z.number().int().default(8).describe("Maximum allowed perception-action iterations"),
+      platform: z.enum(["android", "browser", "desktop"]).optional().describe("Target platform"),
     },
-    async ({ goal, maxSteps }) => {
+    async ({ goal, maxSteps, platform }) => {
       logger.info(`[MCP:goal] Goal: "${goal}" (max ${maxSteps} steps)`);
-      const result = await macroRunner.runGoal(goal, maxSteps);
+      const target = getTarget(platform as TargetPlatform);
+      const runner = new MacroRunner(provider, target, mapper);
+      const result = await runner.runGoal(goal, maxSteps);
 
       return {
         content: [

@@ -2,83 +2,159 @@
 # PEEP CONFIGURATION (peep.yaml)
 # Peripheral Evaluation & Execution Proxy: The Token Shield for AI Coding Harnesses
 # ==============================================================================
+# Peep offloads vision perception, coordinate grounding, micro-loops, and noisy
+# log analysis to local models, saving 95-99% of cloud tokens.
 
 # ------------------------------------------------------------------------------
-# 1. Local / Private Inference Provider
+# 1. Inference Provider Configuration
 # ------------------------------------------------------------------------------
 provider:
-  # Type of backend: 'openai' (vLLM, llama.cpp, LM Studio, OpenRouter) or 'ollama'
+  # Provider backend type:
+  # - 'openai': Any OpenAI-compatible server (llama.cpp, vLLM, LM Studio, OpenRouter, self-hosted)
+  # - 'ollama': Native Ollama HTTP API (http://localhost:11434)
+  # Default: 'openai'
   type: "openai"
 
-  # Base URL of the inference endpoint
-  # - For local llama.cpp / vLLM: http://localhost:11434/v1 or http://localhost:8000/v1
-  # - For native Ollama: http://localhost:11434
-  # - For remote GPU server / home lab: http://192.168.1.100:8000/v1
+  # Base URL of your inference endpoint:
+  # - llama.cpp / vLLM local: http://localhost:11434/v1 or http://localhost:8000/v1
+  # - Ollama native: http://localhost:11434
+  # - Remote GPU / home lab server: http://192.168.1.100:8000/v1
+  # - Remote OpenRouter endpoint: https://openrouter.ai/api/v1
+  # Default: 'http://localhost:11434/v1'
   baseUrl: "http://localhost:11434/v1"
 
-  # API key (optional, for remote endpoints or authenticated vLLM/OpenRouter)
+  # Optional API authentication key (bearer token).
+  # Leave empty for local unauthenticated servers (Ollama, llama.cpp, local vLLM).
+  # Set when connecting to remote GPU servers or authenticated endpoints.
   apiKey: ""
 
-  # Vision-Language Model (VLM) for visual grounding and assertions
-  # Recommended: qwen2.5-vl:7b, ui-tars:7b, gemma-3-vision, or minicpm-v
-  vlmModel: "qwen2.5-vl:7b"
+  # ----------------------------------------------------------------------------
+  # Model Selection (Simplified & Flexible)
+  # ----------------------------------------------------------------------------
+  # Setting 'model' to 'auto' automatically detects and uses the active model
+  # running on your local server. A single multimodal model handles both vision
+  # grounding and log/text analysis out of the box!
+  #
+  # Examples: 'auto', 'qwen2.5-vl:7b', 'ui-tars:7b', 'gemma:2b'
+  # Default: 'auto'
+  model: "auto"
 
-  # Small Language Model (SLM) for high-speed log noise filtering & crash diagnosis
-  # Recommended: gemma:2b, qwen2.5:3b, or gemma:7b
-  slmModel: "gemma:2b"
+  # OPTIONAL: You can optionally override vision or text models if you want to
+  # use two different models (e.g. a larger 7B model for vision grounding and
+  # a smaller 2B model for log parsing). If omitted, both default to 'model'.
+  # visionModel: "qwen2.5-vl:7b"
+  # textModel: "gemma:2b"
 
-  # Request timeout in milliseconds
+  # Request timeout in milliseconds (default: 45000)
   timeoutMs: 45000
 
-  # Sampling temperature (lower = more deterministic coordinates)
+  # Sampling temperature: lower values (0.0 - 0.2) ensure deterministic coordinate output.
+  # Default: 0.1
   temperature: 0.1
 
 # ------------------------------------------------------------------------------
-# 2. Target Peripheral Platform
+# 2. Multi-Target Platforms Configuration
 # ------------------------------------------------------------------------------
 target:
-  # Peripheral target: 'android' (default), 'browser', or 'desktop'
-  type: "android"
+  # Enabled target platforms. Peep supports multiple targets enabled simultaneously!
+  # Options in list: 'android', 'browser', 'desktop'
+  # Default: ['android', 'browser', 'desktop'] (all enabled)
+  enabled:
+    - "android"
+    - "browser"
+    - "desktop"
 
-  # Target Android device ID (optional; if omitted, auto-selects first active device)
-  # Examples: "127.0.0.1:7555", "emulator-5554"
-  deviceId: ""
+  # Default primary platform when tool calls do not explicitly specify a platform.
+  # Options: 'android', 'browser', 'desktop'
+  # Default: 'android'
+  defaultPlatform: "android"
 
-  # Path to adb executable
-  adbPath: "adb"
+  # ----------------------------------------------------------------------------
+  # Android Platform Settings
+  # ----------------------------------------------------------------------------
+  android:
+    # Target device ID or emulator serial.
+    # Leave empty to automatically detect and bind to the active connected device.
+    # Examples: "127.0.0.1:7555", "emulator-5554"
+    deviceId: ""
 
-  # Optional path to scrcpy executable
-  scrcpyPath: "scrcpy"
+    # Path to local adb executable (default: 'adb')
+    adbPath: "adb"
+
+    # REMOTE ADB SERVER SUPPORT:
+    # If your Android device/emulator is connected to a remote machine running
+    # an ADB server daemon (adb -a server nodaemon), specify the host and port:
+    # adbHost: "192.168.1.50"
+    # adbPort: 5037
+
+    # REMOTE DEVICE TCP/IP AUTO-CONNECT:
+    # If using wireless debugging or a remote emulator over TCP/IP, specify the
+    # address. Peep will automatically execute 'adb connect <address>' on startup:
+    # connectAddress: "192.168.1.100:5555"
+
+    # Optional path to scrcpy executable for low-latency streaming
+    scrcpyPath: "scrcpy"
+
+  # ----------------------------------------------------------------------------
+  # Browser Platform Settings (Playwright / CDP)
+  # ----------------------------------------------------------------------------
+  browser:
+    # Run browser in headless mode (default: false)
+    headless: false
+    # Default viewport dimensions
+    viewport:
+      width: 1920
+      height: 1080
+
+  # ----------------------------------------------------------------------------
+  # Desktop Platform Settings
+  # ----------------------------------------------------------------------------
+  desktop:
+    # Monitor index for multi-monitor setups (default: 0)
+    displayIndex: 0
 
 # ------------------------------------------------------------------------------
-# 3. Perception Strategy
+# 3. Perception Strategy Configuration
 # ------------------------------------------------------------------------------
 perception:
   # Perception strategy:
-  # - 'auto': Checks UI accessibility tree first (~15ms, 0 AI tokens), auto-falls back to local VLM
-  # - 'tree_first': Strictly prioritizes accessibility tree
-  # - 'vision_only': Always runs local VLM vision grounding on screenshot
-  # - 'tree_only': Only matches native accessibility tags
+  # - 'auto': Inspects native UI accessibility tree first (~15ms, 0 AI tokens);
+  #           if unlabelled or on a custom canvas/game, falls back to local vision model.
+  # - 'tree_first': Strictly prioritizes native accessibility hierarchy.
+  # - 'vision_only': Always runs local vision grounding on full screenshot.
+  # - 'tree_only': Only matches native accessibility tags; fails if not found in tree.
+  # Default: 'auto'
   strategy: "auto"
 
-  # Normalized coordinate scale (default 1000: [0-1000, 0-1000])
+  # Minimum model confidence score required for visual grounding (0.0 to 1.0)
+  # Default: 0.7
+  confidenceThreshold: 0.7
+
+  # Normalized coordinate resolution scale (default: 1000 = [0-1000, 0-1000])
   coordinateScale: 1000
 
 # ------------------------------------------------------------------------------
-# 4. Log Tailing & Crash Watchdog
+# 4. Log Tailing & Crash Watchdog Configuration
 # ------------------------------------------------------------------------------
 logs:
-  # Max lines kept in background circular memory buffer
+  # Number of lines retained in high-speed circular memory ring buffer (default: 2000)
   ringBufferSize: 2000
 
-  # Strip framework noise (GC pauses, choreographer warnings, window manager spam)
+  # Strip repetitive framework spam (GC pauses, choreographer warnings, window manager noise)
+  # Default: true
   filterNoise: true
 
-  # Automatically detect fatal exceptions & ANRs during action execution
+  # Background watchdog: continuously detects fatal exceptions, SIGSEGV, and ANRs
+  # during action execution and notifies the harness immediately.
+  # Default: true
   watchdog: true
+
+  # Max stack trace lines to extract in crash diagnostic summaries (default: 10)
+  maxAnomalyLines: 10
 
 # ------------------------------------------------------------------------------
 # 5. Logging Level
 # ------------------------------------------------------------------------------
 # Options: 'debug', 'info', 'warn', 'error', 'silent'
+# Default: 'info'
 logLevel: "info"

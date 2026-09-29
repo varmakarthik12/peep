@@ -12,24 +12,63 @@ export class OpenAICompatibleProvider extends BaseInferenceProvider {
   readonly name = "openai_compatible";
   private baseUrl: string;
   private apiKey?: string;
-  private vlmModel: string;
-  private slmModel: string;
+  private model: string;
+  private visionModel: string;
+  private textModel: string;
   private timeoutMs: number;
   private temperature: number;
+  private autoDetected = false;
 
   constructor(config: InferenceProviderConfig) {
     super();
-    // Normalize baseUrl: strip trailing slashes
     let url = config.baseUrl.replace(/\/+$/, "");
     if (!url.endsWith("/v1")) {
       url = `${url}/v1`;
     }
     this.baseUrl = url;
     this.apiKey = config.apiKey;
-    this.vlmModel = config.vlmModel;
-    this.slmModel = config.slmModel;
+    this.model = config.model || "auto";
+    this.visionModel = config.visionModel || this.model;
+    this.textModel = config.textModel || this.model;
     this.timeoutMs = config.timeoutMs;
     this.temperature = config.temperature;
+  }
+
+  private async ensureModel(): Promise<void> {
+    if (this.autoDetected || (this.visionModel !== "auto" && this.textModel !== "auto")) {
+      return;
+    }
+
+    try {
+      const headers: Record<string, string> = { "Content-Type": "application/json" };
+      if (this.apiKey) headers["Authorization"] = `Bearer ${this.apiKey}`;
+
+      const res = await fetch(`${this.baseUrl}/models`, {
+        method: "GET",
+        headers,
+        signal: AbortSignal.timeout(5000),
+      });
+
+      if (res.ok) {
+        const data = (await res.json()) as { data?: Array<{ id: string }>; models?: Array<{ name?: string; model?: string }> };
+        const modelList = data.data || data.models || [];
+        if (modelList.length > 0) {
+          const first = modelList[0];
+          const detectedId = ("id" in first && first.id) || ("name" in first && first.name) || ("model" in first && first.model) || "";
+          if (detectedId) {
+            if (this.visionModel === "auto") this.visionModel = detectedId;
+            if (this.textModel === "auto") this.textModel = detectedId;
+            if (this.model === "auto") this.model = detectedId;
+            this.autoDetected = true;
+            logger.debug(`Auto-detected model from endpoint: ${detectedId}`);
+          }
+        }
+      }
+    } catch {
+      // Fallback default
+      if (this.visionModel === "auto") this.visionModel = "default";
+      if (this.textModel === "auto") this.textModel = "default";
+    }
   }
 
   async checkHealth(): Promise<{
@@ -41,12 +80,9 @@ export class OpenAICompatibleProvider extends BaseInferenceProvider {
   }> {
     const start = Date.now();
     try {
-      const headers: Record<string, string> = {
-        "Content-Type": "application/json",
-      };
-      if (this.apiKey) {
-        headers["Authorization"] = `Bearer ${this.apiKey}`;
-      }
+      await this.ensureModel();
+      const headers: Record<string, string> = { "Content-Type": "application/json" };
+      if (this.apiKey) headers["Authorization"] = `Bearer ${this.apiKey}`;
 
       const res = await fetch(`${this.baseUrl}/models`, {
         method: "GET",
@@ -54,30 +90,29 @@ export class OpenAICompatibleProvider extends BaseInferenceProvider {
         signal: AbortSignal.timeout(5000),
       });
 
+      const latencyMs = Date.now() - start;
+
       if (!res.ok) {
         return {
           ok: false,
-          vlmModel: this.vlmModel,
-          slmModel: this.slmModel,
-          latencyMs: Date.now() - start,
+          vlmModel: this.visionModel,
+          slmModel: this.textModel,
+          latencyMs,
           error: `HTTP ${res.status}: ${res.statusText}`,
         };
       }
 
-      const data = (await res.json()) as { data?: Array<{ id: string }> };
-      const latencyMs = Date.now() - start;
-
       return {
         ok: true,
-        vlmModel: this.vlmModel,
-        slmModel: this.slmModel,
+        vlmModel: this.visionModel,
+        slmModel: this.textModel,
         latencyMs,
       };
     } catch (err) {
       return {
         ok: false,
-        vlmModel: this.vlmModel,
-        slmModel: this.slmModel,
+        vlmModel: this.visionModel,
+        slmModel: this.textModel,
         latencyMs: Date.now() - start,
         error: err instanceof Error ? err.message : String(err),
       };
@@ -89,15 +124,14 @@ export class OpenAICompatibleProvider extends BaseInferenceProvider {
     messages: Array<Record<string, unknown>>,
     formatJson = false
   ): Promise<string> {
-    const headers: Record<string, string> = {
-      "Content-Type": "application/json",
-    };
-    if (this.apiKey) {
-      headers["Authorization"] = `Bearer ${this.apiKey}`;
-    }
+    await this.ensureModel();
+    const effectiveModel = model === "auto" ? this.model : model;
+
+    const headers: Record<string, string> = { "Content-Type": "application/json" };
+    if (this.apiKey) headers["Authorization"] = `Bearer ${this.apiKey}`;
 
     const payload: Record<string, unknown> = {
-      model,
+      model: effectiveModel,
       messages,
       temperature: this.temperature,
     };
@@ -119,15 +153,10 @@ export class OpenAICompatibleProvider extends BaseInferenceProvider {
 
       if (!res.ok) {
         const errText = await res.text();
-        throw new Error(
-          `Inference endpoint error (${res.status} ${res.statusText}): ${errText}`
-        );
+        throw new Error(`Inference endpoint error (${res.status} ${res.statusText}): ${errText}`);
       }
 
-      const data = (await res.json()) as {
-        choices?: Array<{ message?: { content?: string } }>;
-      };
-
+      const data = (await res.json()) as { choices?: Array<{ message?: { content?: string } }> };
       return data.choices?.[0]?.message?.content || "";
     } finally {
       clearTimeout(timeout);
@@ -160,23 +189,20 @@ Notes:
           { type: "text", text: prompt },
           {
             type: "image_url",
-            image_url: {
-              url: `data:image/png;base64,${imageBase64}`,
-            },
+            image_url: { url: `data:image/png;base64,${imageBase64}` },
           },
         ],
       },
     ];
 
     try {
-      const raw = await this.callChat(this.vlmModel, messages, true);
+      const raw = await this.callChat(this.visionModel, messages, true);
       const parsed = this.cleanAndParseJson(raw);
 
       if (parsed && typeof parsed === "object") {
         const found = Boolean(parsed.found ?? true);
         const thought = typeof parsed.thought === "string" ? parsed.thought : "";
         const confidence = typeof parsed.confidence === "number" ? parsed.confidence : 0.85;
-
         const point = this.parseNormalizedPoint(parsed.point);
 
         return {
@@ -187,7 +213,7 @@ Notes:
         };
       }
     } catch (err) {
-      logger.warn(`VLM grounding failed:`, err);
+      logger.warn(`Vision grounding failed:`, err);
     }
 
     return {
@@ -219,16 +245,14 @@ Respond ONLY with a valid JSON object in this exact format:
           { type: "text", text: prompt },
           {
             type: "image_url",
-            image_url: {
-              url: `data:image/png;base64,${imageBase64}`,
-            },
+            image_url: { url: `data:image/png;base64,${imageBase64}` },
           },
         ],
       },
     ];
 
     try {
-      const raw = await this.callChat(this.vlmModel, messages, true);
+      const raw = await this.callChat(this.visionModel, messages, true);
       const parsed = this.cleanAndParseJson(raw);
 
       if (parsed && typeof parsed === "object") {
@@ -251,14 +275,11 @@ Respond ONLY with a valid JSON object in this exact format:
 
   async summarizeLogAnomalies(rawLogs: string[]): Promise<LogSummaryResult> {
     if (rawLogs.length === 0) {
-      return {
-        hasFatalError: false,
-        summary: "No log events recorded in active buffer.",
-      };
+      return { hasFatalError: false, summary: "No log events recorded in active buffer." };
     }
 
     const sample = rawLogs.slice(-250).join("\n");
-    const prompt = `You are a specialized Android and system crash diagnostic agent.
+    const prompt = `You are a specialized crash and diagnostic analysis agent.
 Analyze the following filtered log stream for fatal exceptions, unhandled crashes, ANRs, or critical network failures.
 
 LOG SAMPLE:
@@ -275,7 +296,7 @@ Respond ONLY with a valid JSON object in this exact format:
     const messages = [{ role: "user", content: prompt }];
 
     try {
-      const raw = await this.callChat(this.slmModel || this.vlmModel, messages, true);
+      const raw = await this.callChat(this.textModel, messages, true);
       const parsed = this.cleanAndParseJson(raw);
 
       if (parsed && typeof parsed === "object") {
@@ -302,7 +323,7 @@ Respond ONLY with a valid JSON object in this exact format:
     actionHistory: string[],
     imageBase64: string
   ): Promise<MacroActionStep> {
-    const prompt = `You are an autonomous UI execution agent driving an Android device.
+    const prompt = `You are an autonomous UI execution agent driving a device.
 User Goal: "${goal}"
 Current Step: ${stepIndex + 1}
 Action History:
@@ -326,16 +347,14 @@ Respond ONLY with a valid JSON object:
           { type: "text", text: prompt },
           {
             type: "image_url",
-            image_url: {
-              url: `data:image/png;base64,${imageBase64}`,
-            },
+            image_url: { url: `data:image/png;base64,${imageBase64}` },
           },
         ],
       },
     ];
 
     try {
-      const raw = await this.callChat(this.vlmModel, messages, true);
+      const raw = await this.callChat(this.visionModel, messages, true);
       const parsed = this.cleanAndParseJson(raw);
 
       if (parsed && typeof parsed === "object") {

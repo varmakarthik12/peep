@@ -6,7 +6,7 @@
 [![PRs Welcome](https://img.shields.io/badge/PRs-welcome-orange.svg)](CONTRIBUTING.md)
 
 > **The Open-Source Token Shield for AI Coding Agents.**  
-> Offload mobile visual perception, coordinate grounding, autonomous micro-loops, and noisy log analysis to local models (Ollama, vLLM, llama.cpp)—slashing cloud token consumption by **95% to 99%** across **Google Antigravity 2.0, Cursor, Claude Code, Windsurf, Cline, and GitHub Copilot**.
+> Offload visual perception, coordinate grounding, autonomous micro-loops, and noisy log analysis to any local or private model (Ollama, vLLM, llama.cpp, or OpenAI-compatible endpoints)—slashing cloud token expenditure by **95% to 99%** across **Google Antigravity 2.0, Cursor, Claude Code, Windsurf, Cline, and GitHub Copilot**.
 
 ---
 
@@ -27,7 +27,7 @@ You are paying for a world-class reasoning model (the equivalent of a **Staff / 
 
 **Peep** introduces a clean separation of concerns:
 - **Your Coding Harness (Cloud Model)** = **The Principal Engineer**: Focuses exclusively on system architecture, code synthesis, algorithms, and high-level test intentions (`verify_checkout_flow("test_user")`).
-- **Peep + Local Models** = **The QA & Peripheral Execution Engine**: Runs locally on your machine or private GPU server (via Ollama, vLLM, or llama.cpp) using lightweight Vision-Language Models (Qwen2.5-VL 7B, UI-TARS 7B, Gemma 3) and Small Language Models (Gemma 2B). It handles raw screenshots, coordinate calibration, UI hierarchy dumps, and log noise filtering.
+- **Peep + Local Models** = **The QA & Peripheral Execution Engine**: Runs locally on your machine or private GPU server using whatever local model backend you prefer (Ollama, vLLM, llama.cpp, or remote endpoints). It handles raw screenshots, coordinate calibration, UI hierarchy dumps, and log noise filtering.
 
 ```
        Coding Harness (Antigravity / Cursor / Claude Code / Windsurf / Cline / Copilot)
@@ -43,9 +43,9 @@ You are paying for a world-class reasoning model (the equivalent of a **Staff / 
                                       │
                ┌──────────────────────┴──────────────────────┐
                ▼                                             ▼
-      Local VLM / SLM Engine                        Android / Peripheral
-  (Qwen2.5-VL / UI-TARS / Gemma)                   (ADB / scrcpy / logcat)
-       [0 Cloud Tokens Burned]                     [Physical Tap & Log Tail]
+       Local Model Engine                           Target Peripheral
+  (Ollama / llama.cpp / vLLM)                   (Android / Browser / Desktop)
+    [0 Cloud Tokens Burned]                        [Physical Tap & Log Tail]
 ```
 
 ### Empirical Token & Cost Savings
@@ -59,59 +59,50 @@ You are paying for a world-class reasoning model (the equivalent of a **Staff / 
 
 ---
 
-## 🆚 Why Peep? How It Compares
+## 💡 Simplified Model Architecture: Do I need separate VLM and SLM?
 
-| Feature / Dimension | Raw Cloud Agent | Appium / Maestro | Peep Token Shield |
-| :--- | :--- | :--- | :--- |
-| **Token Cost per Step** | 1,600 – 2,500 tokens | 0 tokens (No LLM reasoning) | **~40 text tokens (98% reduction)** |
-| **Flaky Selector Resiliency**| Low (Rigid or pixel-heavy) | Breaks on UI / text changes | **High (Hybrid UI Tree + Local VLM)** |
-| **Context Window Longevity** | Exhausted in 3–5 actions | N/A | **Hours of continuous agentic flow** |
-| **Setup Complexity** | Zero (Just chat) | High (Drivers, brittle selectors)| **Turnkey (Run `doctor` & go)** |
-| **Local Privacy** | Screenshots leave machine | Local execution | **Screenshots NEVER leave local boundary** |
+**No! Peep is designed for zero friction:**
+- **Single Model by Default**: You do **not** need to juggle separate vision and language models. A single multimodal model handles both screen coordinate grounding and log anomaly summarization.
+- **Smart Auto-Detection**: When set to `model: "auto"`, Peep automatically queries your endpoint (`/v1/models` or `/api/tags`) and binds to the active model currently running on your server. Zero configuration required!
+- **Optional Specialization**: If and only if you deliberately run two different models (e.g. a larger 7B model for vision and a lightweight 2B model for log parsing), you can optionally configure `visionModel` and `textModel`. If omitted, both gracefully default to `model`.
 
 ---
 
-## 🚀 Key Features
+## 🎯 Multi-Target Architecture (Enabled Simultaneously by Default)
 
-- **🛡️ True Token Shield**: Your cloud model never ingests raw pixels or logcat spam. All vision tokens stay local.
-- **⚡ Three-Tier Perception Cascade**:
-  - **Tier 0 (~15ms)**: Direct match on Android Accessibility/UI hierarchy tags (0 AI tokens).
-  - **Tier 1 (~120ms)**: Compact semantic tree parsing via local SLM.
-  - **Tier 2 (~500ms)**: Zero-copy screenshot grounding via local VLM (Qwen2.5-VL / UI-TARS).
-- **📐 Calibrated Geometry Engine**: Accurate translation from normalized $[0, 1000]$ model space to physical device pixels with aspect ratio compensation, rotation transforms ($0^\circ, 90^\circ, 180^\circ, 270^\circ$), and humanized touch jitter.
-- **🔄 Autonomous Micro-Loops (`peep_execute_goal`)**: Hand over multi-step UI flows (e.g. *"Dismiss dialog and navigate to profile settings"*) to the local model to run locally without pinging the cloud model on every frame.
-- **🪵 Smart Log Filtering & Crash Watchdog**: Background ring buffer tracks live logs, strips framework noise, and uses local SLM to summarize fatal crashes into a concise 3-line diagnostic.
-- **🔌 Generic & Backend-Agnostic**: Works with Ollama, llama.cpp, vLLM, LM Studio, or any remote OpenAI-compatible endpoint.
-- **💻 Dual Interface (MCP + Direct CLI)**: Use it as an MCP server inside your IDE, or run commands directly from your terminal or CI/CD pipelines (`peep tap`, `peep assert`, `peep logs`).
+Unlike single-purpose tools, Peep features a unified `TargetManager` that supports **multiple targets enabled simultaneously**:
+- **Android**: ADB integration with local or remote servers, screen frame capture, `uiautomator` accessibility trees, and ring-buffered `logcat` monitoring.
+- **Browser**: Web automation adapter scaffold (Playwright / CDP) for web app validation.
+- **Desktop**: Desktop OS window control adapter scaffold (MSS / display capture).
+
+All enabled targets are active at startup. Tool calls auto-route to your primary active target, or you can pass an explicit `platform: "android" | "browser" | "desktop"` parameter.
 
 ---
 
-## ⏱️ Quickstart (Under 2 Minutes)
+## 🌐 Remote ADB Server & Network Device Support
 
-### 1. Prerequisite: Local Models
-Ensure you have a local vision model running (e.g. via [Ollama](https://ollama.ai) or LM Studio):
+Peep supports both local USB devices and remote enterprise or cloud device farms:
+- **Remote ADB Server (`adbHost` & `adbPort`)**: Direct ADB commands to a remote ADB daemon over the network (`adb -H <host> -P <port>`).
+- **Remote Device TCP/IP Auto-Connect (`connectAddress`)**: Automatically executes `adb connect <ip:port>` on startup for wireless debugging or remote cloud emulators.
 
+---
+
+## 🚀 Quickstart (Under 2 Minutes)
+
+### 1. Ensure Local Inference is Running
+Start your favorite local server (Ollama, llama.cpp, vLLM, LM Studio, etc.):
 ```bash
-# Pull recommended models via Ollama:
-ollama pull qwen2.5-vl:7b
-ollama pull gemma:2b
+# Example with Ollama:
+ollama run qwen2.5-vl:7b
+
+# Or with llama.cpp:
+llama-server -m your-model.gguf --port 11434
 ```
 
-### 2. Connect Your Android Device / Emulator
-Ensure USB Debugging is enabled:
+### 2. Verify System Health in 1 Second
+Run Peep Doctor to auto-detect your connected device and model:
 ```bash
-adb devices
-# Output should list your device or emulator (e.g., emulator-5554 or 127.0.0.1:7555)
-```
-
-### 3. Run Peep Doctor & Benchmark
-Validate your environment and preview your savings in seconds:
-```bash
-# Verify connection to ADB and inference backend:
 npx peep-mcp doctor
-
-# Simulate empirical token and cost savings:
-npx peep-mcp benchmark
 ```
 
 ---
@@ -130,10 +121,10 @@ peep type "alice@example.com" --target "Email Address"
 # Swipe smoothly up/down/left/right
 peep swipe up --distance medium
 
-# Visually verify screen condition using local VLM (0 cloud tokens)
+# Visually verify screen condition using local model
 peep assert "Dashboard welcome header is visible"
 
-# Check logs for crashes (summarized by local SLM into 3 lines)
+# Check logs for crashes (summarized by local model)
 peep logs --crashes
 
 # Run an autonomous local micro-loop
@@ -141,16 +132,20 @@ peep goal "Dismiss notification popup and open Settings" --max-steps 6
 
 # View total session token & cost savings
 peep stats
+
+# Connect to remote ADB server or network device on the fly
+peep doctor --adb-host 192.168.1.50 --adb-port 5037
+peep tap "Submit" --connect 192.168.1.100:5555
 ```
 
 ---
 
-## 🔌 Integration with Coding Harnesses
+## 🔌 Coding Harness Integrations
 
-Peep includes turnkey configuration snippets and instruction files in `configs/harnesses/`:
+Peep drops into any coding harness via standard MCP configuration:
 
 ### 1. Google Antigravity 2.0
-Add to `~/.gemini/antigravity/mcp_config.json` (or project `.gemini/mcp_config.json`):
+In `~/.gemini/config/mcp_config.json`:
 ```json
 {
   "mcpServers": {
@@ -160,94 +155,126 @@ Add to `~/.gemini/antigravity/mcp_config.json` (or project `.gemini/mcp_config.j
       "env": {
         "PEEP_PROVIDER_TYPE": "openai",
         "PEEP_BASE_URL": "http://localhost:11434/v1",
-        "PEEP_VLM_MODEL": "qwen2.5-vl:7b",
-        "PEEP_SLM_MODEL": "gemma:2b",
-        "PEEP_TARGET_TYPE": "android"
+        "PEEP_MODEL": "auto"
       }
     }
   }
 }
 ```
-*Native Skill*: Copy `configs/harnesses/antigravity/SKILL.md` to `.gemini/skills/peep-token-shield/SKILL.md`.
+*Native Skill*: Copy `configs/harnesses/antigravity/SKILL.md` to your Antigravity skills directory.
 
 ### 2. Cursor
-Add to `.cursor/mcp.json`:
+In `.cursor/mcp.json`:
 ```json
 {
   "mcpServers": {
     "peep": {
       "command": "npx",
-      "args": ["-y", "peep-mcp", "serve"],
-      "env": {
-        "PEEP_PROVIDER_TYPE": "openai",
-        "PEEP_BASE_URL": "http://localhost:11434/v1",
-        "PEEP_VLM_MODEL": "qwen2.5-vl:7b",
-        "PEEP_SLM_MODEL": "gemma:2b"
-      }
+      "args": ["-y", "peep-mcp", "serve"]
     }
   }
 }
 ```
 Copy `configs/harnesses/cursor/rules.mdc` to `.cursor/rules/peep.mdc`.
 
-### 3. Claude Code CLI & Claude Desktop
-Add directly via Claude CLI:
+### 3. Claude Desktop & Claude Code CLI
+In `claude_desktop_config.json` or via CLI:
 ```bash
-claude mcp add peep -- npx -y peep-mcp serve
+claude mcp add peep npx -y peep-mcp serve
 ```
 Copy `configs/harnesses/claude/CLAUDE.md` to your repository root.
 
 ### 4. Windsurf Cascade
-Add to `~/.codeium/windsurf/mcp_config.json`:
+In `mcp_config.json`:
 ```json
 {
   "mcpServers": {
     "peep": {
       "command": "npx",
-      "args": ["-y", "peep-mcp", "serve"],
-      "env": {
-        "PEEP_PROVIDER_TYPE": "openai",
-        "PEEP_BASE_URL": "http://localhost:11434/v1",
-        "PEEP_VLM_MODEL": "qwen2.5-vl:7b",
-        "PEEP_SLM_MODEL": "gemma:2b"
-      }
+      "args": ["-y", "peep-mcp", "serve"]
     }
   }
 }
 ```
 Copy `configs/harnesses/windsurf/windsurfrules.md` to `.windsurfrules`.
 
-### 5. Cline & Roo Code
-Add to `cline_mcp_settings.json` with `autoApprove` permissions for continuous automation:
-```json
-{
-  "mcpServers": {
-    "peep": {
-      "command": "npx",
-      "args": ["-y", "peep-mcp", "serve"],
-      "disabled": false,
-      "autoApprove": [
-        "peep_find_and_tap",
-        "peep_type_text",
-        "peep_swipe",
-        "peep_press_key",
-        "peep_assert_screen_state",
-        "peep_tail_and_filter_logs",
-        "peep_execute_goal",
-        "peep_get_telemetry"
-      ]
-    }
-  }
-}
-```
-Add instructions from `configs/harnesses/cline_roocode/custom_instructions.md` to your Custom Instructions.
+---
 
-### 6. GitHub Copilot
-Copy `configs/harnesses/copilot/copilot-instructions.md` to `.github/copilot-instructions.md` to guide Copilot Chat and Edits to generate lightweight `peep` CLI automation commands.
+## ⚙️ Complete Configuration Reference (`peep.yaml`)
+
+Peep can be configured via `peep.yaml` in your project root, environment variables (`PEEP_*`), or CLI flags.
+
+```yaml
+# ==============================================================================
+# 1. INFERENCE PROVIDER
+# ==============================================================================
+provider:
+  type: "openai"              # 'openai' (llama.cpp, vLLM, LM Studio, OpenRouter) or 'ollama'
+  baseUrl: "http://localhost:11434/v1" # Endpoint base URL
+  apiKey: ""                  # Optional API token for authenticated remote endpoints
+  model: "auto"               # Primary model ('auto' automatically detects active model)
+  visionModel: "auto"         # Optional: override specifically for vision grounding
+  textModel: "auto"           # Optional: override specifically for log/text diagnosis
+  timeoutMs: 45000            # Inference request timeout in milliseconds
+  temperature: 0.1            # Sampling temperature (0.0 - 0.2 recommended for coordinates)
+
+# ==============================================================================
+# 2. TARGET PLATFORMS
+# ==============================================================================
+target:
+  # List of enabled platforms (default: all enabled)
+  enabled:
+    - "android"
+    - "browser"
+    - "desktop"
+  defaultPlatform: "android"  # Default fallback platform
+
+  # Android-specific settings
+  android:
+    deviceId: ""              # Target device ID (leave empty for auto-detection)
+    adbPath: "adb"            # Path to adb binary
+    adbHost: ""               # Optional remote ADB server host (e.g. "192.168.1.50")
+    adbPort: 5037             # Optional remote ADB server port
+    connectAddress: ""        # Optional remote device IP:port to auto-connect (e.g. "192.168.1.100:5555")
+    scrcpyPath: "scrcpy"      # Optional scrcpy path
+
+  # Browser-specific settings
+  browser:
+    headless: false           # Run browser headlessly
+    viewport:
+      width: 1920
+      height: 1080
+
+  # Desktop-specific settings
+  desktop:
+    displayIndex: 0           # Primary monitor index
+
+# ==============================================================================
+# 3. PERCEPTION & GROUNDING
+# ==============================================================================
+perception:
+  strategy: "auto"            # 'auto', 'tree_first', 'vision_only', 'tree_only'
+  confidenceThreshold: 0.7    # Minimum confidence score for visual detections
+  coordinateScale: 1000       # Normalized coordinate space (default: 0-1000)
+
+# ==============================================================================
+# 4. LOG TAILING & CRASH WATCHDOG
+# ==============================================================================
+logs:
+  ringBufferSize: 2000        # Lines retained in memory ring buffer
+  filterNoise: true           # Suppress framework noise (GC pauses, choreographer)
+  watchdog: true              # Detect fatal crashes and ANRs during execution
+  maxAnomalyLines: 10         # Max stack lines extracted in summaries
+
+# ==============================================================================
+# 5. LOGGING LEVEL
+# ==============================================================================
+logLevel: "info"              # 'debug', 'info', 'warn', 'error', 'silent'
+```
 
 ---
 
-## 🧰 Exposed MCP Tools
+## 🛠️ Exposed MCP Tools
 
 | MCP Tool Name | Description | Cloud Token Cost |
 | :--- | :--- | :--- |
@@ -255,67 +282,25 @@ Copy `configs/harnesses/copilot/copilot-instructions.md` to `.github/copilot-ins
 | `peep_type_text` | Focuses field and inputs text with proper escaping. | ~40 text tokens |
 | `peep_swipe` | Dispatches calibrated directional swipe gesture. | ~30 text tokens |
 | `peep_press_key` | Hardware/nav key event (`back`, `home`, `enter`). | ~25 text tokens |
-| `peep_assert_screen_state` | Local VLM visual verification of expected condition. | ~60 text tokens (0 vision tokens) |
-| `peep_tail_and_filter_logs` | Noise-filtered logs + local SLM crash diagnosis. | ~60 text tokens (vs 35,000 raw) |
+| `peep_assert_screen_state` | Local visual verification of expected condition. | ~60 text tokens (0 vision tokens) |
+| `peep_tail_and_filter_logs` | Noise-filtered logs + local crash diagnosis. | ~60 text tokens (vs 35,000 raw) |
 | `peep_execute_goal` | Autonomous local micro-loop for multi-step tasks. | ~120 text tokens total |
 | `peep_get_telemetry` | Cumulative shielded tokens and estimated USD savings. | ~40 text tokens |
 
 ---
 
-## ⚙️ Configuration (`peep.yaml`)
-
-Peep can be configured via `peep.yaml` in your working directory, environment variables (`PEEP_*`), or CLI flags:
-
-```yaml
-provider:
-  type: "openai"              # 'openai' or 'ollama'
-  baseUrl: "http://localhost:11434/v1"
-  vlmModel: "qwen2.5-vl:7b"
-  slmModel: "gemma:2b"
-  timeoutMs: 45000
-
-target:
-  type: "android"             # 'android', 'browser', or 'desktop'
-  deviceId: ""                # Auto-detects active device if left blank
-  adbPath: "adb"
-
-perception:
-  strategy: "auto"            # 'auto', 'tree_first', 'vision_only', 'tree_only'
-
-logs:
-  ringBufferSize: 2000
-  filterNoise: true
-  watchdog: true
-```
-
----
-
-## 📚 Deep Dive Documentation
+## 📚 Documentation
 
 - [System Architecture Specification](docs/ARCHITECTURE.md)
-- [Empirical Benchmarks & Token Calculus Whitepaper](docs/BENCHMARKS.md)
-- [Turnkey Harness Integration Guides](docs/HARNESS_INTEGRATIONS.md)
-- [Local Models & Inference Backend Guide](docs/LOCAL_MODELS_GUIDE.md)
-- [Contributor Guide](CONTRIBUTING.md)
-
----
-
-## 🗺️ Roadmap
-
-- [x] Android target adapter via ADB & uiautomator
-- [x] Three-tier hybrid perception cascade
-- [x] Calibrated coordinate mapping with rotation compensation
-- [x] Noise-filtered logcat ring buffer & crash watchdog
-- [x] Autonomous local micro-loops (`peep goal`)
-- [ ] Browser target adapter (Playwright / Chrome DevTools Protocol)
-- [ ] Desktop target adapter (Native OS window control)
-- [ ] Direct scrcpy raw H.264 low-latency socket streaming
+- [Empirical Benchmarks & Token Calculus](docs/BENCHMARKS.md)
+- [Harness Integration Guides](docs/HARNESS_INTEGRATIONS.md)
+- [Local Models & Inference Setup](docs/LOCAL_MODELS_GUIDE.md)
 
 ---
 
 ## 🤝 Contributing
 
-We welcome issues and pull requests! Please read our [Contributor Guide](CONTRIBUTING.md) to get started.
+We welcome contributions! See [CONTRIBUTING.md](CONTRIBUTING.md) for local development workflows and guidelines.
 
 ---
 

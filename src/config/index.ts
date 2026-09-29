@@ -43,7 +43,9 @@ export function loadConfig(explicitPath?: string, overrides: Partial<PeepConfig>
   // Merge environment variables
   const envConfig: Record<string, unknown> = {
     provider: {},
-    target: {},
+    target: {
+      android: {},
+    },
     perception: {},
     logs: {},
   };
@@ -52,13 +54,43 @@ export function loadConfig(explicitPath?: string, overrides: Partial<PeepConfig>
   if (process.env.PEEP_PROVIDER_TYPE) providerObj.type = process.env.PEEP_PROVIDER_TYPE;
   if (process.env.PEEP_BASE_URL) providerObj.baseUrl = process.env.PEEP_BASE_URL;
   if (process.env.PEEP_API_KEY) providerObj.apiKey = process.env.PEEP_API_KEY;
+  if (process.env.PEEP_MODEL) providerObj.model = process.env.PEEP_MODEL;
+  if (process.env.PEEP_VISION_MODEL) providerObj.visionModel = process.env.PEEP_VISION_MODEL;
+  if (process.env.PEEP_TEXT_MODEL) providerObj.textModel = process.env.PEEP_TEXT_MODEL;
   if (process.env.PEEP_VLM_MODEL) providerObj.vlmModel = process.env.PEEP_VLM_MODEL;
   if (process.env.PEEP_SLM_MODEL) providerObj.slmModel = process.env.PEEP_SLM_MODEL;
 
   const targetObj = envConfig.target as Record<string, unknown>;
-  if (process.env.PEEP_TARGET_TYPE) targetObj.type = process.env.PEEP_TARGET_TYPE;
-  if (process.env.PEEP_DEVICE_ID) targetObj.deviceId = process.env.PEEP_DEVICE_ID;
-  if (process.env.PEEP_ADB_PATH) targetObj.adbPath = process.env.PEEP_ADB_PATH;
+  const androidObj = targetObj.android as Record<string, unknown>;
+
+  if (process.env.PEEP_TARGETS_ENABLED) {
+    targetObj.enabled = process.env.PEEP_TARGETS_ENABLED.split(",").map((s) => s.trim());
+  }
+  if (process.env.PEEP_DEFAULT_PLATFORM) {
+    targetObj.defaultPlatform = process.env.PEEP_DEFAULT_PLATFORM;
+  }
+  if (process.env.PEEP_TARGET_TYPE) {
+    targetObj.defaultPlatform = process.env.PEEP_TARGET_TYPE;
+  }
+
+  // Android specific env
+  if (process.env.PEEP_DEVICE_ID) {
+    androidObj.deviceId = process.env.PEEP_DEVICE_ID;
+    targetObj.deviceId = process.env.PEEP_DEVICE_ID;
+  }
+  if (process.env.PEEP_ADB_PATH) {
+    androidObj.adbPath = process.env.PEEP_ADB_PATH;
+    targetObj.adbPath = process.env.PEEP_ADB_PATH;
+  }
+  if (process.env.PEEP_ADB_HOST) {
+    androidObj.adbHost = process.env.PEEP_ADB_HOST;
+  }
+  if (process.env.PEEP_ADB_PORT) {
+    androidObj.adbPort = parseInt(process.env.PEEP_ADB_PORT, 10);
+  }
+  if (process.env.PEEP_ADB_CONNECT) {
+    androidObj.connectAddress = process.env.PEEP_ADB_CONNECT;
+  }
 
   if (process.env.PEEP_LOG_LEVEL) {
     envConfig.logLevel = process.env.PEEP_LOG_LEVEL;
