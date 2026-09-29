@@ -1,0 +1,33 @@
+---
+description: Always use Peep Token Shield for Android & UI interaction, assertions, and log tailing.
+globs: **/*
+alwaysApply: true
+---
+
+# Cursor Rule: Peep Token Shield
+
+When automating Android apps, running mobile UI smoke tests, or investigating device crashes:
+
+## 1. Context Preservation Directives
+- **NEVER capture or request raw screenshots into the Composer / Chat context.** A single full-resolution frame burns 1,600 to 2,500 tokens.
+- **NEVER run raw `adb logcat` or pipe endless system logs into chat.** 
+- **Rely on Peep MCP tools for all peripheral operations.** Peep offloads vision grounding and log parsing to local models, returning only compact JSON telemetry (~40 tokens).
+
+## 2. Peep MCP Tool Reference
+- `peep_find_and_tap(target="...", strategy="auto")`: Taps element. Automatically checks UI accessibility tree first (~15ms, 0 tokens), then falls back to local VLM.
+- `peep_type_text(target="...", text="...")`: Focuses field and types text.
+- `peep_swipe(direction="up|down|left|right", distance="short|medium|long")`: Directional swipe gestures.
+- `peep_press_key(key="back|home|enter|tab")`: Dispatches hardware/navigation keys.
+- `peep_assert_screen_state(expectedState="...")`: Visual assertion evaluated by local VLM (0 cloud tokens).
+- `peep_tail_and_filter_logs(searchCrashes=true)`: Fetches noise-filtered logs with local SLM crash diagnosis.
+- `peep_execute_goal(goal="...", maxSteps=8)`: Hands multi-step sub-tasks to local autonomous micro-loop.
+- `peep_get_telemetry()`: Returns cumulative shielded tokens and cost savings.
+
+## 3. Direct CLI Terminal Alternative
+When operating in terminal mode:
+- `peep tap "<target>"`
+- `peep type "<text>" --target "<field>"`
+- `peep swipe up`
+- `peep assert "<expected condition>"`
+- `peep logs --crashes`
+- `peep stats`

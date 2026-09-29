@@ -1,0 +1,25 @@
+{
+  "mcpServers": {
+    "peep": {
+      "command": "npx",
+      "args": ["-y", "peep-mcp", "serve"],
+      "env": {
+        "PEEP_PROVIDER_TYPE": "openai",
+        "PEEP_BASE_URL": "http://localhost:11434/v1",
+        "PEEP_VLM_MODEL": "qwen2.5-vl:7b",
+        "PEEP_SLM_MODEL": "gemma:2b"
+      },
+      "disabled": false,
+      "autoApprove": [
+        "peep_find_and_tap",
+        "peep_type_text",
+        "peep_swipe",
+        "peep_press_key",
+        "peep_assert_screen_state",
+        "peep_tail_and_filter_logs",
+        "peep_execute_goal",
+        "peep_get_telemetry"
+      ]
+    }
+  }
+}

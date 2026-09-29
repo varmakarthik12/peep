@@ -1,0 +1,73 @@
+{
+  "name": "peep-mcp",
+  "version": "0.1.0",
+  "description": "Peripheral Evaluation & Execution Proxy: The open-source token shield for AI coding harnesses that offloads mobile visual perception, coordinate grounding, micro-loops, and noisy log analysis to local models.",
+  "type": "module",
+  "bin": {
+    "peep": "./dist/cli.js"
+  },
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "files": [
+    "dist",
+    "configs",
+    "README.md",
+    "LICENSE"
+  ],
+  "engines": {
+    "node": ">=18.0.0"
+  },
+  "scripts": {
+    "build": "tsup",
+    "dev": "tsup --watch",
+    "start": "node ./dist/cli.js serve",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "typecheck": "tsc --noEmit",
+    "lint": "tsc --noEmit",
+    "prepublishOnly": "npm run build"
+  },
+  "keywords": [
+    "mcp",
+    "model-context-protocol",
+    "agentic-coding",
+    "token-shield",
+    "android",
+    "scrcpy",
+    "adb",
+    "antigravity",
+    "cursor",
+    "claude-code",
+    "windsurf",
+    "local-vlm",
+    "qwen2.5-vl",
+    "gemma",
+    "ollama",
+    "vllm"
+  ],
+  "author": "Karthik Varma <varmakarthik12>",
+  "license": "Apache-2.0",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/varmakarthik12/peep.git"
+  },
+  "bugs": {
+    "url": "https://github.com/varmakarthik12/peep/issues"
+  },
+  "homepage": "https://github.com/varmakarthik12/peep#readme",
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "^1.6.1",
+    "commander": "^13.1.0",
+    "fast-xml-parser": "^5.0.8",
+    "picocolors": "^1.1.1",
+    "yaml": "^2.7.0",
+    "zod": "^3.24.2"
+  },
+  "devDependencies": {
+    "@types/node": "^22.13.9",
+    "@vitest/coverage-v8": "^3.2.7",
+    "tsup": "^8.4.0",
+    "typescript": "^5.8.2",
+    "vitest": "^3.0.7"
+  }
+}

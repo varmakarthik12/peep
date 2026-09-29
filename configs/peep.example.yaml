@@ -1,0 +1,84 @@
+# ==============================================================================
+# PEEP CONFIGURATION (peep.yaml)
+# Peripheral Evaluation & Execution Proxy: The Token Shield for AI Coding Harnesses
+# ==============================================================================
+
+# ------------------------------------------------------------------------------
+# 1. Local / Private Inference Provider
+# ------------------------------------------------------------------------------
+provider:
+  # Type of backend: 'openai' (vLLM, llama.cpp, LM Studio, OpenRouter) or 'ollama'
+  type: "openai"
+
+  # Base URL of the inference endpoint
+  # - For local llama.cpp / vLLM: http://localhost:11434/v1 or http://localhost:8000/v1
+  # - For native Ollama: http://localhost:11434
+  # - For remote GPU server / home lab: http://192.168.1.100:8000/v1
+  baseUrl: "http://localhost:11434/v1"
+
+  # API key (optional, for remote endpoints or authenticated vLLM/OpenRouter)
+  apiKey: ""
+
+  # Vision-Language Model (VLM) for visual grounding and assertions
+  # Recommended: qwen2.5-vl:7b, ui-tars:7b, gemma-3-vision, or minicpm-v
+  vlmModel: "qwen2.5-vl:7b"
+
+  # Small Language Model (SLM) for high-speed log noise filtering & crash diagnosis
+  # Recommended: gemma:2b, qwen2.5:3b, or gemma:7b
+  slmModel: "gemma:2b"
+
+  # Request timeout in milliseconds
+  timeoutMs: 45000
+
+  # Sampling temperature (lower = more deterministic coordinates)
+  temperature: 0.1
+
+# ------------------------------------------------------------------------------
+# 2. Target Peripheral Platform
+# ------------------------------------------------------------------------------
+target:
+  # Peripheral target: 'android' (default), 'browser', or 'desktop'
+  type: "android"
+
+  # Target Android device ID (optional; if omitted, auto-selects first active device)
+  # Examples: "127.0.0.1:7555", "emulator-5554"
+  deviceId: ""
+
+  # Path to adb executable
+  adbPath: "adb"
+
+  # Optional path to scrcpy executable
+  scrcpyPath: "scrcpy"
+
+# ------------------------------------------------------------------------------
+# 3. Perception Strategy
+# ------------------------------------------------------------------------------
+perception:
+  # Perception strategy:
+  # - 'auto': Checks UI accessibility tree first (~15ms, 0 AI tokens), auto-falls back to local VLM
+  # - 'tree_first': Strictly prioritizes accessibility tree
+  # - 'vision_only': Always runs local VLM vision grounding on screenshot
+  # - 'tree_only': Only matches native accessibility tags
+  strategy: "auto"
+
+  # Normalized coordinate scale (default 1000: [0-1000, 0-1000])
+  coordinateScale: 1000
+
+# ------------------------------------------------------------------------------
+# 4. Log Tailing & Crash Watchdog
+# ------------------------------------------------------------------------------
+logs:
+  # Max lines kept in background circular memory buffer
+  ringBufferSize: 2000
+
+  # Strip framework noise (GC pauses, choreographer warnings, window manager spam)
+  filterNoise: true
+
+  # Automatically detect fatal exceptions & ANRs during action execution
+  watchdog: true
+
+# ------------------------------------------------------------------------------
+# 5. Logging Level
+# ------------------------------------------------------------------------------
+# Options: 'debug', 'info', 'warn', 'error', 'silent'
+logLevel: "info"
