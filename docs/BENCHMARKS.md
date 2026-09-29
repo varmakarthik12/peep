@@ -49,8 +49,8 @@ Dumping 35,000 tokens of raw logcat into your conversation context produces seve
 
 ### 2.3 The Peep Token Shield Solution
 Peep intercepts all raw screenshots and log streams at the local boundary:
-- **Local VLM / Tree Perception**: Resolves $(X, Y)$ coordinates locally using Qwen2.5-VL / UI-TARS or Android Accessibility XML.
-- **Local SLM Log Filtering**: Gathers raw lines into a local circular ring buffer, strips framework noise, and executes a local Gemma 2B anomaly diagnosis.
+- **Local Perception & Tree Grounding**: Resolves $(X, Y)$ coordinates locally using a local multimodal model or native Android Accessibility XML.
+- **Local Log Filtering**: Gathers raw lines into a local circular ring buffer, strips framework noise, and executes a local anomaly diagnosis.
 - **Shielded Cloud Return**: Returns only an ultra-compact JSON result:
   ```json
   {

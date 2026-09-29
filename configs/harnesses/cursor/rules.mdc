@@ -14,12 +14,12 @@ When automating Android apps, running mobile UI smoke tests, or investigating de
 - **Rely on Peep MCP tools for all peripheral operations.** Peep offloads vision grounding and log parsing to local models, returning only compact JSON telemetry (~40 tokens).
 
 ## 2. Peep MCP Tool Reference
-- `peep_find_and_tap(target="...", strategy="auto")`: Taps element. Automatically checks UI accessibility tree first (~15ms, 0 tokens), then falls back to local VLM.
+- `peep_find_and_tap(target="...", strategy="auto")`: Taps element. Automatically checks UI accessibility tree first (~15ms, 0 tokens), then falls back to local vision perception.
 - `peep_type_text(target="...", text="...")`: Focuses field and types text.
 - `peep_swipe(direction="up|down|left|right", distance="short|medium|long")`: Directional swipe gestures.
 - `peep_press_key(key="back|home|enter|tab")`: Dispatches hardware/navigation keys.
-- `peep_assert_screen_state(expectedState="...")`: Visual assertion evaluated by local VLM (0 cloud tokens).
-- `peep_tail_and_filter_logs(searchCrashes=true)`: Fetches noise-filtered logs with local SLM crash diagnosis.
+- `peep_assert_screen_state(expectedState="...")`: Visual assertion evaluated by local model (0 cloud tokens).
+- `peep_tail_and_filter_logs(searchCrashes=true)`: Fetches noise-filtered logs with local crash diagnosis.
 - `peep_execute_goal(goal="...", maxSteps=8)`: Hands multi-step sub-tasks to local autonomous micro-loop.
 - `peep_get_telemetry()`: Returns cumulative shielded tokens and cost savings.
 

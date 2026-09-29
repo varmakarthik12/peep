@@ -14,7 +14,7 @@ When assisting with Android application development, mobile UI testing, device a
 When generating terminal commands or automation tasks, use:
 
 ```bash
-# Tapping UI elements (Tier 0 UI hierarchy / Tier 2 local VLM)
+# Tapping UI elements (Tier 0 UI hierarchy / Tier 2 local vision)
 peep tap "Login Button"
 peep tap "Shopping Cart Icon"
 
@@ -28,7 +28,7 @@ peep swipe down --distance short
 peep press back
 peep press home
 
-# Visual Verification (Evaluated by local VLM, zero cloud tokens burned)
+# Visual Verification (Evaluated by local vision model, zero cloud tokens burned)
 peep assert "Order confirmation banner with ID #1234 is visible"
 peep assert "Error dialog says 'Invalid Credentials'"
 

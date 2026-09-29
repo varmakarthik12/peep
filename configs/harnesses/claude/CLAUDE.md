@@ -15,7 +15,7 @@ When working in repositories involving Android development, mobile testing, or d
 - **Tap an element**:
   - Via CLI: `peep tap "<target-description>"` (e.g. `peep tap "Sign In"`)
   - Via MCP: `peep_find_and_tap(target="Sign In", strategy="auto")`
-  - *Note*: Strategy `auto` checks Android accessibility trees first (15ms, 0 tokens), falling back to local VLM vision grounding.
+  - *Note*: Strategy `auto` checks Android accessibility trees first (15ms, 0 tokens), falling back to local vision perception.
 
 - **Type into fields**:
   - Via CLI: `peep type "<text>" --target "<field-name>"`
@@ -30,7 +30,7 @@ When working in repositories involving Android development, mobile testing, or d
   - Via MCP: `peep_press_key(key="back")`
 
 ### 3. Visual Assertions (Zero Cloud Vision Tokens)
-- Verify screen state using local VLM:
+- Verify screen state using local model:
   - Via CLI: `peep assert "<expected visual condition>"`
   - Via MCP: `peep_assert_screen_state(expectedState="Dashboard balance is visible")`
 

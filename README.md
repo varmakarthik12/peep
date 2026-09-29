@@ -64,7 +64,22 @@ You are paying for a world-class reasoning model (the equivalent of a **Staff / 
 **No! Peep is designed for zero friction:**
 - **Single Model by Default**: You do **not** need to juggle separate vision and language models. A single multimodal model handles both screen coordinate grounding and log anomaly summarization.
 - **Smart Auto-Detection**: When set to `model: "auto"`, Peep automatically queries your endpoint (`/v1/models` or `/api/tags`) and binds to the active model currently running on your server. Zero configuration required!
-- **Optional Specialization**: If and only if you deliberately run two different models (e.g. a larger 7B model for vision and a lightweight 2B model for log parsing), you can optionally configure `visionModel` and `textModel`. If omitted, both gracefully default to `model`.
+- **Optional Specialization**: If and only if you deliberately run two different models (e.g. a larger model for vision grounding and a lightweight model for log parsing), you can optionally configure `visionModel` and `textModel`. If omitted, both gracefully default to `model`.
+
+### ❓ Is a Local Model Even Mandatory? What is the Default Fallback?
+
+**No, a local model is NOT mandatory for standard UI automation!**
+
+Peep implements a high-performance tiered fallback architecture:
+1. **Tier 0 Deterministic Hierarchy Grounding (~15ms, 0 AI Tokens, 0 Models Needed)**:  
+   When you tap or type (`peep tap "Sign In"`), Peep defaults to `strategy: "auto"`. It first inspects the platform's native accessibility hierarchy (`uiautomator dump` on Android, DOM on browser, accessibility tree on desktop). If the element exists by text, content description, or ID, Peep calculates coordinates and clicks it in **~15ms with 0 AI models and 0 tokens**.
+2. **Deterministic Regex Log & Crash Filtering (< 2ms, 0 AI Tokens, 0 Models Needed)**:  
+   `peep logs` and the background crash watchdog rely on high-performance in-memory regex filters (detecting `FATAL EXCEPTION`, `ANR`, `SIGSEGV`, uncaught exceptions). This operates in < 2ms without needing any local model.
+3. **When IS a Local Model Used?**:  
+   The local model is only invoked as an intelligent fallback when:
+   - **Visual Grounding is Required**: The target element is a custom-drawn canvas, Flutter widget, game view, or an unlabelled graphic icon that does not appear in the accessibility tree.
+   - **Visual Assertions**: You explicitly call `peep_assert_screen_state` or `peep assert "Order confirmation is visible"` to visually inspect screen pixels.
+   - **High-Level Log Summaries**: You request an AI-generated natural language summary of a complex stack trace.
 
 ---
 
@@ -89,15 +104,16 @@ Peep supports both local USB devices and remote enterprise or cloud device farms
 
 ## 🚀 Quickstart (Under 2 Minutes)
 
-### 1. Ensure Local Inference is Running
+### 1. Ensure Local Inference is Running (Optional)
 Start your favorite local server (Ollama, llama.cpp, vLLM, LM Studio, etc.):
 ```bash
-# Example with Ollama:
-ollama run qwen2.5-vl:7b
+# Example with Ollama (any multimodal model):
+ollama run llama3.2-vision
 
 # Or with llama.cpp:
 llama-server -m your-model.gguf --port 11434
 ```
+*(Remember: If you don't run a local model, Peep still operates using Tier 0 native accessibility tree matching and deterministic log filtering!)*
 
 ### 2. Verify System Health in 1 Second
 Run Peep Doctor to auto-detect your connected device and model:
@@ -271,6 +287,68 @@ logs:
 # ==============================================================================
 logLevel: "info"              # 'debug', 'info', 'warn', 'error', 'silent'
 ```
+
+### Detailed Configuration Breakdown
+
+#### 1. Inference Provider Settings (`provider`)
+| Parameter | Env Variable | Type | Default | Optional? | Description |
+| :--- | :--- | :--- | :--- | :--- | :--- |
+| `type` | `PEEP_PROVIDER_TYPE` | `"openai" \| "ollama"` | `"openai"` | Optional | Inference protocol. `"openai"` works with llama.cpp, vLLM, LM Studio, Ollama `/v1`, and OpenRouter. `"ollama"` uses native Ollama RPC. |
+| `baseUrl` | `PEEP_BASE_URL` | `string` | `"http://localhost:11434/v1"` | Optional | HTTP endpoint URL of the inference server. |
+| `apiKey` | `PEEP_API_KEY` | `string` | `""` | Optional | Bearer authentication token for remote endpoints (OpenRouter, private cloud gateways). |
+| `model` | `PEEP_MODEL` | `string` | `"auto"` | Optional | Primary model name. When `"auto"`, Peep queries `/v1/models` or `/api/tags` and auto-binds to the active model. |
+| `visionModel` | `PEEP_VLM_MODEL` | `string` | inherits `model` | Optional | Override specifically for visual perception / coordinate grounding. |
+| `textModel` | `PEEP_SLM_MODEL` | `string` | inherits `model` | Optional | Override specifically for log anomaly diagnosis. |
+| `timeoutMs` | `PEEP_TIMEOUT_MS` | `number` | `45000` | Optional | Request timeout in milliseconds before failing over or aborting. |
+| `temperature` | `PEEP_TEMPERATURE` | `number` | `0.1` | Optional | Sampling temperature (keep low $\le 0.2$ for accurate coordinate extraction). |
+
+#### 2. Target Platforms (`target`)
+| Parameter | Env Variable | Type | Default | Optional? | Description |
+| :--- | :--- | :--- | :--- | :--- | :--- |
+| `enabled` | `PEEP_TARGET_ENABLED` | `string[]` | `["android", "browser", "desktop"]` | Optional | Array of platforms enabled simultaneously. Tool calls auto-route or accept `platform: "android"`. |
+| `defaultPlatform` | `PEEP_DEFAULT_PLATFORM` | `"android" \| "browser" \| "desktop"` | `"android"` | Optional | Fallback platform when a tool call does not specify `platform`. |
+
+##### Android Platform Settings (`target.android`)
+| Parameter | Env Variable | Type | Default | Optional? | Description |
+| :--- | :--- | :--- | :--- | :--- | :--- |
+| `deviceId` | `PEEP_DEVICE_ID` | `string` | `""` (auto) | Optional | Specific ADB device serial. If empty, Peep auto-detects the first online device. |
+| `adbPath` | `PEEP_ADB_PATH` | `string` | `"adb"` | Optional | Path or command name for the `adb` executable. |
+| `adbHost` | `PEEP_ADB_HOST` | `string` | `""` | Optional | Remote ADB server hostname or IP address (`adb -H <host>`). |
+| `adbPort` | `PEEP_ADB_PORT` | `number` | `5037` | Optional | Remote ADB server port (`adb -P <port>`). |
+| `connectAddress` | `PEEP_CONNECT_ADDRESS`| `string` | `""` | Optional | Remote device network IP:port to automatically connect via `adb connect` (e.g. `"192.168.1.100:5555"`). |
+| `scrcpyPath` | `PEEP_SCRCPY_PATH` | `string` | `"scrcpy"` | Optional | Optional path to `scrcpy` binary for low-latency H.264 video streaming. |
+
+##### Browser Platform Settings (`target.browser`)
+| Parameter | Env Variable | Type | Default | Optional? | Description |
+| :--- | :--- | :--- | :--- | :--- | :--- |
+| `headless` | `PEEP_BROWSER_HEADLESS`| `boolean` | `false` | Optional | Whether to launch headless browser instance. |
+| `viewport.width` | `PEEP_VIEWPORT_WIDTH` | `number` | `1920` | Optional | Virtual browser viewport width in pixels. |
+| `viewport.height`| `PEEP_VIEWPORT_HEIGHT`| `number` | `1080` | Optional | Virtual browser viewport height in pixels. |
+
+##### Desktop Platform Settings (`target.desktop`)
+| Parameter | Env Variable | Type | Default | Optional? | Description |
+| :--- | :--- | :--- | :--- | :--- | :--- |
+| `displayIndex` | `PEEP_DISPLAY_INDEX` | `number` | `0` | Optional | Index of the physical display monitor to capture and interact with. |
+
+#### 3. Perception & Grounding (`perception`)
+| Parameter | Env Variable | Type | Default | Optional? | Description |
+| :--- | :--- | :--- | :--- | :--- | :--- |
+| `strategy` | `PEEP_STRATEGY` | `"auto" \| "tree_first" \| "vision_only" \| "tree_only"` | `"auto"` | Optional | Perception strategy. `"auto"` tries native accessibility tree first (0ms, 0 AI tokens), falling back to local vision model. |
+| `confidenceThreshold` | `PEEP_CONFIDENCE_THRESHOLD` | `number` | `0.7` | Optional | Minimum confidence score $(0.0 - 1.0)$ required to accept visual grounding. |
+| `coordinateScale` | `PEEP_COORDINATE_SCALE` | `number` | `1000` | Optional | Normalized coordinate range (e.g., $1000$ maps to $[0, 1000]$ normalized space). |
+
+#### 4. Log Tailing & Crash Watchdog (`logs`)
+| Parameter | Env Variable | Type | Default | Optional? | Description |
+| :--- | :--- | :--- | :--- | :--- | :--- |
+| `ringBufferSize` | `PEEP_LOG_RING_BUFFER` | `number` | `2000` | Optional | Maximum number of log lines retained in the in-memory FIFO queue. |
+| `filterNoise` | `PEEP_FILTER_NOISE` | `boolean` | `true` | Optional | Strips high-frequency framework noise (Choreographer, GC pauses, ViewRootImpl). |
+| `watchdog` | `PEEP_WATCHDOG` | `boolean` | `true` | Optional | Background watchdog that monitors fatal exceptions, ANRs, and SIGSEGVs synchronously. |
+| `maxAnomalyLines`| `PEEP_MAX_ANOMALY_LINES`| `number` | `10` | Optional | Maximum stack trace lines included in concise JSON crash summaries. |
+
+#### 5. General Settings
+| Parameter | Env Variable | Type | Default | Optional? | Description |
+| :--- | :--- | :--- | :--- | :--- | :--- |
+| `logLevel` | `PEEP_LOG_LEVEL` | `"debug" \| "info" \| "warn" \| "error" \| "silent"` | `"info"` | Optional | Console logging verbosity for Peep server and CLI. |
 
 ---
 

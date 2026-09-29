@@ -8,12 +8,12 @@ When executing mobile UI tests, interacting with Android devices, or debugging a
 - **Compact Telemetry**: Each Peep action returns lightweight JSON (~40 tokens), preserving your Cascade context for architectural reasoning.
 
 ## 2. MCP Tools Quick Reference
-- `peep_find_and_tap`: Locate element by label or local VLM vision and tap.
+- `peep_find_and_tap`: Locate element by label or local vision model and tap.
 - `peep_type_text`: Input text with proper field focusing.
 - `peep_swipe`: Smooth directional swiping (`up`, `down`, `left`, `right`).
 - `peep_press_key`: Back, Home, Enter keys.
-- `peep_assert_screen_state`: Verify UI state visually using local VLM without burning cloud tokens.
-- `peep_tail_and_filter_logs`: Extract fatal crashes via local SLM instead of reading raw logs.
+- `peep_assert_screen_state`: Verify UI state visually using local model without burning cloud tokens.
+- `peep_tail_and_filter_logs`: Extract fatal crashes via local model or crash watchdog instead of reading raw logs.
 - `peep_execute_goal`: Delegate multi-step UI flows to local autonomous micro-loop.
 - `peep_get_telemetry`: Inspect cumulative tokens and dollar savings.
 

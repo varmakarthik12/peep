@@ -6,8 +6,7 @@
       "env": {
         "PEEP_PROVIDER_TYPE": "openai",
         "PEEP_BASE_URL": "http://localhost:11434/v1",
-        "PEEP_VLM_MODEL": "qwen2.5-vl:7b",
-        "PEEP_SLM_MODEL": "gemma:2b"
+        "PEEP_MODEL": "auto"
       },
       "disabled": false,
       "autoApprove": [

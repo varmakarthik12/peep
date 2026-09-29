@@ -32,11 +32,11 @@ Requiring the Principal Engineer to perform low-level peripheral tasks (pixel in
 +─────────────────────────────────────────────────────────────+
          │                                    │
          ▼                                    ▼
-+───────────────────────+           +─────────────────────────+
-│ Local / Private Model │           │ Target Device (Android) │
-│ (Qwen2.5-VL / Gemma)  │           │ (ADB / scrcpy / logcat) │
-│ [0 Cloud Tokens Burn] │           +─────────────────────────+
-+───────────────────────+
++──────────────────────────────────────+           +─────────────────────────+
+│ Local / Private Multimodal Model     │           │ Target Device (Android) │
+│ (Ollama / llama.cpp / vLLM / etc.)   │           │ (ADB / scrcpy / logcat) │
+│ [0 Cloud Tokens Burn]                │           +─────────────────────────+
++──────────────────────────────────────+
 ```
 
 ---
@@ -49,10 +49,10 @@ Peep employs a cascading perception strategy to maximize execution speed and min
 flowchart TD
     Start["find_and_tap('Submit')"] --> T0{"Tier 0: Accessibility Tree Match?"}
     T0 -- Yes (~15ms) --> Act0["Dispatch Physical Center Tap<br/>[0 AI Tokens]"]
-    T0 -- No / Custom Canvas --> T1{"Strategy Allows VLM?"}
+    T0 -- No / Custom Canvas --> T1{"Strategy Allows Vision?"}
     T1 -- Yes --> Capture["Capture Screen Buffer (screencap)"]
-    Capture --> LocalVLM["Local VLM (Qwen2.5-VL / UI-TARS)<br/>Ground Target Prompt"]
-    LocalVLM --> Calibrate["Geometry Engine:<br/>Normalize [0,1000] -> Physical (X, Y)"]
+    Capture --> LocalVision["Local Vision Model (auto-detected)<br/>Ground Target Prompt"]
+    LocalVision --> Calibrate["Geometry Engine:<br/>Normalize [0,1000] -> Physical (X, Y)"]
     Calibrate --> Act2["Dispatch Calibrated Physical Tap<br/>[0 Cloud Tokens]"]
     Act0 --> Telemetry["Record Telemetry<br/>Shielded: 1,600 Tokens"]
     Act2 --> Telemetry
@@ -64,15 +64,15 @@ flowchart TD
 - Performs exact or fuzzy matching against `text`, `content-desc`, or `resource-id`.
 - If matched, calculates physical center:
   $$X_c = \frac{\text{left} + \text{right}}{2}, \quad Y_c = \frac{\text{top} + \text{bottom}}{2}$$
-- Dispatches direct touch event immediately via `adb shell input tap X Y`.
+- Dispatches direct touch event immediately via `adb shell input tap X Y`. No AI model invocation required.
 
 ### Tier 1: Compact Semantic Tree Filtering (~120ms, 0 Vision Tokens)
 - Parses accessibility XML into a lightweight JSON tree (< 1KB).
-- If an element lacks an exact string match (e.g. icon buttons with ambiguous descriptions), runs a local SLM (e.g. Gemma 2B) on the compact JSON to infer the target node index.
+- If an element lacks an exact string match (e.g. icon buttons with ambiguous descriptions), runs the local model on the compact JSON to infer the target node index.
 
-### Tier 2: Local VLM Visual Grounding (~400–800ms, 0 Cloud Tokens)
+### Tier 2: Local Vision Model Grounding (~400–800ms, 0 Cloud Tokens)
 - Captures full-resolution screen buffer via `adb exec-out screencap -p`.
-- Passes base64 image to local Vision-Language Model (Qwen2.5-VL or UI-TARS).
+- Passes base64 image to your local multimodal vision model (auto-detected from your endpoint).
 - The model outputs normalized coordinates $[u, v] \in [0, 1000] \times [0, 1000]$.
 - Peep calibrates the point to physical display pixels with aspect ratio compensation.
 
@@ -119,9 +119,9 @@ Peep maintains an asynchronous background tailer connected to `adb shell logcat 
                ┌──────────────┴──────────────┐
                ▼                             ▼
 +─────────────────────────────+  +─────────────────────────────+
-│    Live Crash Watchdog      │  │      SLM Anomaly Gate       │
+│    Live Crash Watchdog      │  │    Local Anomaly Gate       │
 │  Watches for: FATAL, ANR,   │  │  Extracts: Culprit, Cause,  │
-│  SIGSEGV, UncaughtException │  │  Stack Snippet (Gemma 2B)   │
+│  SIGSEGV, UncaughtException │  │  Stack Snippet (Local Model)│
 +─────────────────────────────+  +─────────────────────────────+
                │                             │
                └──────────────┬──────────────┘
@@ -133,8 +133,8 @@ Peep maintains an asynchronous background tailer connected to `adb shell logcat 
 
 1. **Circular Ring Buffer**: Retains the last $N = 2000$ lines in memory without disk churn.
 2. **Noise Filter**: Suppresses high-volume framework logs (`Choreographer`, `GC_*`, `ViewRootImpl`, `InputMethodManager`).
-3. **Crash Watchdog**: Monitored synchronously during every tap/action for `FATAL EXCEPTION`, `ANR in`, `SIGSEGV`.
-4. **SLM Anomaly Gate**: On demand, passes the filtered buffer to a local SLM (Gemma 2B) which produces an ultra-compact 3-line diagnostic:
+3. **Crash Watchdog**: Monitored synchronously during every tap/action for `FATAL EXCEPTION`, `ANR in`, `SIGSEGV` using deterministic zero-latency regexes.
+4. **Local Anomaly Gate**: On demand, passes the filtered buffer to the local model to produce an ultra-compact 3-line diagnostic:
    ```json
    {
      "hasFatalError": true,

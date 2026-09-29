@@ -10,7 +10,7 @@ You are equipped with **Peep**, an intelligent Token Shield and execution middle
 ## Core Philosophy: You are the Principal Engineer
 - **Do NOT request raw screenshots into your context.** A single full-resolution mobile screenshot burns ~1,600-2,500 vision tokens.
 - **Do NOT tail raw `logcat` directly.** A typical Android log stream burns 30,000+ tokens and fills your context with GC noise.
-- **Delegate perception, visual grounding, and log parsing to Peep.** Peep delegates raw visual processing to a local VLM (Qwen2.5-VL / UI-TARS / Gemma) and returns only lightweight, structured JSON telemetry.
+- **Delegate perception, visual grounding, and log parsing to Peep.** Peep delegates raw visual processing to your local multimodal model (or resolves it directly via native UI accessibility trees) and returns only lightweight, structured JSON telemetry.
 
 ---
 
@@ -41,13 +41,13 @@ You are equipped with **Peep**, an intelligent Token Shield and execution middle
 - When an app crashes or after executing an action:
   Use `peep_tail_and_filter_logs(searchCrashes=true)`.
   - Peep filters thousands of lines of framework noise in memory.
-  - A local SLM analyzes the crash stack and returns a concise 3-line diagnostic:
+  - A local model analyzes the crash stack and returns a concise 3-line diagnostic:
     `{ "hasFatalError": true, "culprit": "LoginActivity.kt:42", "summary": "NullPointerException on button click" }`.
 
 ### 5. Multi-Step Autonomous Flows
 - When executing a multi-step routine (e.g. "Dismiss notifications dialog and navigate to Account Settings"):
   Use `peep_execute_goal(goal="...", maxSteps=6)`.
-  - The local VLM executes the sub-loop locally.
+  - The local model executes the sub-loop locally.
   - You receive only the final outcome summary, saving 10,000+ tokens.
 
 ### 6. Tracking Token Savings

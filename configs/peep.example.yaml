@@ -35,15 +35,15 @@ provider:
   # running on your local server. A single multimodal model handles both vision
   # grounding and log/text analysis out of the box!
   #
-  # Examples: 'auto', 'qwen2.5-vl:7b', 'ui-tars:7b', 'gemma:2b'
+  # Examples: 'auto', 'llama3.2-vision', 'your-multimodal-model'
   # Default: 'auto'
   model: "auto"
 
   # OPTIONAL: You can optionally override vision or text models if you want to
-  # use two different models (e.g. a larger 7B model for vision grounding and
-  # a smaller 2B model for log parsing). If omitted, both default to 'model'.
-  # visionModel: "qwen2.5-vl:7b"
-  # textModel: "gemma:2b"
+  # use two different models (e.g. a larger model for vision grounding and
+  # a smaller model for log parsing). If omitted, both default to 'model'.
+  # visionModel: "your-multimodal-model"
+  # textModel: "your-text-model"
 
   # Request timeout in milliseconds (default: 45000)
   timeoutMs: 45000

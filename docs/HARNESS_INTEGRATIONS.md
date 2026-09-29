@@ -34,9 +34,7 @@ Add `peep` to your Antigravity MCP configuration.
       "env": {
         "PEEP_PROVIDER_TYPE": "openai",
         "PEEP_BASE_URL": "http://localhost:11434/v1",
-        "PEEP_VLM_MODEL": "qwen2.5-vl:7b",
-        "PEEP_SLM_MODEL": "gemma:2b",
-        "PEEP_TARGET_TYPE": "android"
+        "PEEP_MODEL": "auto"
       }
     }
   }
@@ -83,8 +81,7 @@ Create or edit `.cursor/mcp.json` in your repository root:
       "env": {
         "PEEP_PROVIDER_TYPE": "openai",
         "PEEP_BASE_URL": "http://localhost:11434/v1",
-        "PEEP_VLM_MODEL": "qwen2.5-vl:7b",
-        "PEEP_SLM_MODEL": "gemma:2b"
+        "PEEP_MODEL": "auto"
       }
     }
   }
@@ -121,7 +118,7 @@ Add Peep directly using the Claude CLI:
 claude mcp add peep -- npx -y peep-mcp serve
 
 # Or add with environment variables:
-claude mcp add peep --env PEEP_BASE_URL=http://localhost:11434/v1 --env PEEP_VLM_MODEL=qwen2.5-vl:7b -- npx -y peep-mcp serve
+claude mcp add peep --env PEEP_BASE_URL=http://localhost:11434/v1 --env PEEP_MODEL=auto -- npx -y peep-mcp serve
 ```
 
 Next, copy `CLAUDE.md` to your repository root:
@@ -144,8 +141,7 @@ Edit your `claude_desktop_config.json`:
       "env": {
         "PEEP_PROVIDER_TYPE": "openai",
         "PEEP_BASE_URL": "http://localhost:11434/v1",
-        "PEEP_VLM_MODEL": "qwen2.5-vl:7b",
-        "PEEP_SLM_MODEL": "gemma:2b"
+        "PEEP_MODEL": "auto"
       }
     }
   }
@@ -170,8 +166,7 @@ Edit `~/.codeium/windsurf/mcp_config.json` (or your project's `.windsurf/mcp_con
       "env": {
         "PEEP_PROVIDER_TYPE": "openai",
         "PEEP_BASE_URL": "http://localhost:11434/v1",
-        "PEEP_VLM_MODEL": "qwen2.5-vl:7b",
-        "PEEP_SLM_MODEL": "gemma:2b"
+        "PEEP_MODEL": "auto"
       }
     }
   }
@@ -207,8 +202,7 @@ Add the following:
       "env": {
         "PEEP_PROVIDER_TYPE": "openai",
         "PEEP_BASE_URL": "http://localhost:11434/v1",
-        "PEEP_VLM_MODEL": "qwen2.5-vl:7b",
-        "PEEP_SLM_MODEL": "gemma:2b"
+        "PEEP_MODEL": "auto"
       },
       "disabled": false,
       "autoApprove": [
@@ -260,5 +254,5 @@ peep logs --crashes
 | **`spawn npx ENOENT`** | Node.js / npm not found in harness PATH | Specify the absolute path to `node` and `peep-mcp` or install globally: `npm install -g peep-mcp` and set `"command": "peep"`. |
 | **`No Android devices connected`** | ADB daemon offline or device unauthorized | Run `adb devices` in terminal; ensure USB debugging prompt is accepted on phone/emulator. |
 | **`fetch failed (ECONNREFUSED 11434)`** | Local inference engine (Ollama/vLLM) not running | Run `ollama serve` or ensure your Docker container is up on port 11434 / 8000. |
-| **`VLM model 'qwen2.5-vl:7b' not found`** | Model hasn't been pulled yet | Run `ollama pull qwen2.5-vl:7b` in terminal. |
+| **`Specified model not found`** | Model hasn't been loaded on endpoint | Pull/load your model, or set `model: "auto"` to automatically bind to the running model. |
 | **Harness hangs waiting for tool** | Stdio buffered or device command timed out | Check `peep doctor` output to confirm ADB and inference latencies are < 1000ms. |
