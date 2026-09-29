@@ -21,6 +21,7 @@
     "build": "tsup",
     "dev": "tsup --watch",
     "start": "node ./dist/cli.js serve",
+    "pretest": "npm run build",
     "test": "vitest run",
     "test:watch": "vitest",
     "typecheck": "tsc --noEmit",
