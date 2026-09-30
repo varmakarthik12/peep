@@ -44,18 +44,28 @@ Add `peep` to your Antigravity MCP configuration.
 > [!TIP]
 > If running native Ollama without the `/v1` compatibility layer, set `"PEEP_PROVIDER_TYPE": "ollama"` and `"PEEP_BASE_URL": "http://localhost:11434"`.
 
-### Step 2: Install Native Skill
-Copy the ready-made skill definition into your Antigravity skills repository:
+### Step 2: Install Native Skill & /peep Slash Command
+Download and install the native skill directly from GitHub:
 
-```bash
-# Workspace level (Recommended for project repos):
-mkdir -p .gemini/skills/peep-token-shield
-cp configs/harnesses/antigravity/SKILL.md .gemini/skills/peep-token-shield/SKILL.md
+**Global User Level (Enables `/peep` slash command across all workspaces):**
+- **macOS / Linux**:
+  ```bash
+  mkdir -p ~/.gemini/config/skills/peep && curl -fsSL https://raw.githubusercontent.com/varmakarthik12/peep/main/configs/harnesses/antigravity/SKILL.md -o ~/.gemini/config/skills/peep/SKILL.md
+  ```
+- **Windows (PowerShell)**:
+  ```powershell
+  New-Item -ItemType Directory -Force -Path "$HOME\.gemini\config\skills\peep"; Invoke-WebRequest -Uri "https://raw.githubusercontent.com/varmakarthik12/peep/main/configs/harnesses/antigravity/SKILL.md" -OutFile "$HOME\.gemini\config\skills\peep\SKILL.md"
+  ```
 
-# Or global user level:
-mkdir -p ~/.gemini/antigravity/builtin/skills/peep-token-shield
-cp configs/harnesses/antigravity/SKILL.md ~/.gemini/antigravity/builtin/skills/peep-token-shield/SKILL.md
-```
+**Project Workspace Level (Applies to current repository only):**
+- **macOS / Linux**:
+  ```bash
+  mkdir -p .agents/skills/peep && curl -fsSL https://raw.githubusercontent.com/varmakarthik12/peep/main/configs/harnesses/antigravity/SKILL.md -o .agents/skills/peep/SKILL.md
+  ```
+- **Windows (PowerShell)**:
+  ```powershell
+  New-Item -ItemType Directory -Force -Path ".agents\skills\peep"; Invoke-WebRequest -Uri "https://raw.githubusercontent.com/varmakarthik12/peep/main/configs/harnesses/antigravity/SKILL.md" -OutFile ".agents\skills\peep\SKILL.md"
+  ```
 
 ### Step 3: Verify in Antigravity
 Start an Antigravity prompt:
@@ -88,15 +98,17 @@ Create or edit `.cursor/mcp.json` in your repository root:
 }
 ```
 
-### Step 2: Install Cursor Rule
-Copy the rule file to enable automatic token-shield delegation:
+### Step 2: Install Cursor Rule (`.cursor/rules/peep.mdc`)
+Download the rule file directly from GitHub into your project:
 
-```bash
-mkdir -p .cursor/rules
-cp configs/harnesses/cursor/rules.mdc .cursor/rules/peep.mdc
-```
-
-Or for legacy `.cursorrules` users, append the content of `configs/harnesses/cursor/rules.mdc` to `.cursorrules`.
+- **macOS / Linux**:
+  ```bash
+  mkdir -p .cursor/rules && curl -fsSL https://raw.githubusercontent.com/varmakarthik12/peep/main/configs/harnesses/cursor/rules.mdc -o .cursor/rules/peep.mdc
+  ```
+- **Windows (PowerShell)**:
+  ```powershell
+  New-Item -ItemType Directory -Force -Path ".cursor\rules"; Invoke-WebRequest -Uri "https://raw.githubusercontent.com/varmakarthik12/peep/main/configs/harnesses/cursor/rules.mdc" -OutFile ".cursor\rules\peep.mdc"
+  ```
 
 ### Step 3: Example Cursor Prompt
 In Cursor Chat (Ctrl+L / Cmd+L) or Composer (Ctrl+I / Cmd+I):
@@ -121,10 +133,15 @@ claude mcp add peep -- npx -y peep-mcp serve
 claude mcp add peep --env PEEP_BASE_URL=http://localhost:11434/v1 --env PEEP_MODEL=auto -- npx -y peep-mcp serve
 ```
 
-Next, copy `CLAUDE.md` to your repository root:
-```bash
-cp configs/harnesses/claude/CLAUDE.md ./CLAUDE.md
-```
+Next, download project instructions (`CLAUDE.md`) directly from GitHub:
+- **macOS / Linux**:
+  ```bash
+  curl -fsSL https://raw.githubusercontent.com/varmakarthik12/peep/main/configs/harnesses/claude/CLAUDE.md -o CLAUDE.md
+  ```
+- **Windows (PowerShell)**:
+  ```powershell
+  Invoke-WebRequest -Uri "https://raw.githubusercontent.com/varmakarthik12/peep/main/configs/harnesses/claude/CLAUDE.md" -OutFile "CLAUDE.md"
+  ```
 
 ### Claude Desktop
 Edit your `claude_desktop_config.json`:
@@ -173,11 +190,16 @@ Edit `~/.codeium/windsurf/mcp_config.json` (or your project's `.windsurf/mcp_con
 }
 ```
 
-### Step 2: Install Windsurf Rules
-Copy the rule template:
-```bash
-cp configs/harnesses/windsurf/windsurfrules.md .windsurfrules
-```
+### Step 2: Install Windsurf Rules (`.windsurfrules`)
+Download rules directly from GitHub into your project:
+- **macOS / Linux**:
+  ```bash
+  curl -fsSL https://raw.githubusercontent.com/varmakarthik12/peep/main/configs/harnesses/windsurf/windsurfrules.md -o .windsurfrules
+  ```
+- **Windows (PowerShell)**:
+  ```powershell
+  Invoke-WebRequest -Uri "https://raw.githubusercontent.com/varmakarthik12/peep/main/configs/harnesses/windsurf/windsurfrules.md" -OutFile ".windsurfrules"
+  ```
 
 ---
 
@@ -221,7 +243,16 @@ Add the following:
 ```
 
 ### Step 2: Add Custom Instructions
-In the Cline/Roo Code settings UI, paste the contents of `configs/harnesses/cline_roocode/custom_instructions.md` into the **Custom Instructions** field.
+Download custom instructions directly from GitHub:
+- **macOS / Linux**:
+  ```bash
+  curl -fsSL https://raw.githubusercontent.com/varmakarthik12/peep/main/configs/harnesses/cline_roocode/custom_instructions.md -o cline_peep_instructions.md
+  ```
+- **Windows (PowerShell)**:
+  ```powershell
+  Invoke-WebRequest -Uri "https://raw.githubusercontent.com/varmakarthik12/peep/main/configs/harnesses/cline_roocode/custom_instructions.md" -OutFile "cline_peep_instructions.md"
+  ```
+Then paste the contents into the **Custom Instructions** field in Cline/Roo Code settings.
 
 ---
 
@@ -229,12 +260,16 @@ In the Cline/Roo Code settings UI, paste the contents of `configs/harnesses/clin
 
 GitHub Copilot Chat and Copilot Workspace leverage instruction files to guide agentic tool usage and terminal commands.
 
-### Step 1: Add Instruction File
-Copy the Copilot instruction template to your repository:
-```bash
-mkdir -p .github
-cp configs/harnesses/copilot/copilot-instructions.md .github/copilot-instructions.md
-```
+### Step 1: Install Instructions (`.github/copilot-instructions.md`)
+Download the instructions directly from GitHub:
+- **macOS / Linux**:
+  ```bash
+  mkdir -p .github && curl -fsSL https://raw.githubusercontent.com/varmakarthik12/peep/main/configs/harnesses/copilot/copilot-instructions.md -o .github/copilot-instructions.md
+  ```
+- **Windows (PowerShell)**:
+  ```powershell
+  New-Item -ItemType Directory -Force -Path ".github"; Invoke-WebRequest -Uri "https://raw.githubusercontent.com/varmakarthik12/peep/main/configs/harnesses/copilot/copilot-instructions.md" -OutFile ".github\copilot-instructions.md"
+  ```
 
 ### Step 2: Direct CLI Interaction
 Because Copilot operates efficiently through integrated terminal execution, it will use direct CLI commands:

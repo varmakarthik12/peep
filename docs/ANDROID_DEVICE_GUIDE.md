@@ -137,6 +137,10 @@ This is the **most common misconfiguration** encountered when setting up MCP ser
 | **`deviceId`** / **`PEEP_DEVICE_ID`** | The serial number or TCP socket of the **target Android device/emulator**. | Auto-detected | Set to the specific emulator socket (e.g. `localhost:7555`) or USB serial (e.g. `RF8M10XXXXX`). |
 | **`connectAddress`** / **`PEEP_CONNECT_ADDRESS`** | Network address of a remote/Wi-Fi Android device to auto-connect via `adb connect`. | `""` | Set to your phone's Wi-Fi IP (e.g. `192.168.1.100:5555`). |
 
+> [!IMPORTANT]
+> **For 99.9% of Users: Do NOT set `adbHost` or `adbPort`!**
+> If you are running an emulator (like MuMu, BlueStacks, Nox, or Android Studio AVD) or a USB device on your computer, ADB handles the background daemon automatically on `127.0.0.1:5037`. You **only** need to configure `deviceId` (e.g. `localhost:7555`), or leave it empty for auto-detection! Setting `adbPort` to an emulator port will break ADB communication.
+
 > [!CAUTION]
 > **Common Trap**: Setting `adbPort: 7555` when using MuMu Player!
 >

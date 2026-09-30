@@ -94,11 +94,85 @@ All enabled targets are active at startup. Tool calls auto-route to your primary
 
 ---
 
-## 🌐 Remote ADB Server & Network Device Support
+## 📱 Android Device Targeting (Device ID & Zero-Config Auto-Discovery)
 
-Peep supports both local USB devices and remote enterprise or cloud device farms:
-- **Remote ADB Server (`adbHost` & `adbPort`)**: Direct ADB commands to a remote ADB daemon over the network (`adb -H <host> -P <port>`).
-- **Remote Device TCP/IP Auto-Connect (`connectAddress`)**: Automatically executes `adb connect <ip:port>` on startup for wireless debugging or remote cloud emulators.
+Peep makes connecting to Android devices and emulators effortless:
+
+### 1. Zero-Config Auto-Discovery
+If you have **one Android emulator or physical device connected**, you do **not** need to configure any device ID or port. Peep queries ADB, detects the online target, checks display resolution, and auto-binds instantly.
+
+### 2. Explicit Device Targeting (`deviceId`)
+When you have multiple devices attached (e.g. an emulator and a physical phone), specify which device Peep should command:
+- In MCP configuration: `"PEEP_DEVICE_ID": "localhost:7555"`
+- In `peep.yaml`: `deviceId: "localhost:7555"`
+- In CLI: `peep -d localhost:7555 tap "Login"`
+
+To inspect all attached devices, hardware models, and serials in 1 second, run:
+```bash
+npx peep-mcp devices
+```
+
+### Common Device Sockets Reference
+| Device / Emulator | Socket / Serial ID | Peep Configuration |
+| :--- | :--- | :--- |
+| **Android Studio AVD** | `emulator-5554` | Auto-detected, or `PEEP_DEVICE_ID="emulator-5554"` |
+| **MuMu Player 6 & 12** | `localhost:7555` *(or `127.0.0.1:7555`)* | `PEEP_DEVICE_ID="localhost:7555"` |
+| **BlueStacks 5** | `127.0.0.1:5555` | `PEEP_DEVICE_ID="127.0.0.1:5555"` |
+| **Nox Player** | `127.0.0.1:62001` | `PEEP_DEVICE_ID="127.0.0.1:62001"` |
+| **LDPlayer 9** | `127.0.0.1:5555` | `PEEP_DEVICE_ID="127.0.0.1:5555"` |
+| **Physical Phone (USB)** | Alphanumeric (from `peep devices`) | Auto-detected, or `PEEP_DEVICE_ID="RF8M10XXXXX"` |
+| **Wi-Fi Debugging** | `<device-ip>:<port>` | `PEEP_CONNECT_ADDRESS="192.168.1.100:5555"` |
+
+> [!NOTE]
+> **No Remote Ports Needed**: You do not need to configure any ADB host or port for local emulators or USB devices. Emulator sockets (like `7555` or `5555`) are **Device IDs**, not ADB daemon ports. (For advanced enterprise setups running remote ADB daemons across Docker/CI, see the [Android Device Guide](docs/ANDROID_DEVICE_GUIDE.md)).
+
+---
+
+## 📦 Prerequisites & System Installation
+
+Peep runs cleanly across macOS, Windows, and Linux. Ensure the following tools are available in your environment:
+
+### 1. Node.js (>= 18.0.0) — **Required**
+Runtime required for Peep CLI and MCP Server.
+- **macOS**: `brew install node` *(or via nvm: `nvm install --lts`)*
+- **Windows**: `winget install OpenJS.NodeJS.LTS` *(or `choco install nodejs-lts`)*
+- **Linux (Ubuntu/Debian)**: `sudo apt update && sudo apt install -y nodejs npm`
+- **Linux (Arch)**: `sudo pacman -S nodejs npm`
+
+Verify: `node -v`
+
+### 2. Android Debug Bridge (`adb`) — **Required for Android Automation**
+Command-line bridge used by Peep to inspect accessibility trees, tap elements, swipe, and tail logs.
+- **macOS**: `brew install android-platform-tools`
+- **Windows**: `winget install Google.PlatformTools` *(or `choco install adb`)*
+- **Linux (Ubuntu/Debian)**: `sudo apt update && sudo apt install -y android-tools-adb`
+- **Linux (Fedora/RHEL)**: `sudo dnf install -y android-tools`
+- **Linux (Arch)**: `sudo pacman -S android-tools`
+
+Verify: `adb version`
+
+> [!NOTE]
+> If Android Studio is already installed, `adb` is already present on your machine in:
+> - **macOS**: `~/Library/Android/sdk/platform-tools`
+> - **Windows**: `%LOCALAPPDATA%\Android\Sdk\platform-tools`
+> - **Linux**: `~/Android/Sdk/platform-tools`  
+> Simply ensure that directory is added to your system `PATH`.
+
+### 3. scrcpy — **Optional (Performance Boost)**
+Peep automatically detects `scrcpy` if present to stream H.264 screen frames at ultra-low latency.
+- **What if scrcpy is NOT installed?** Peep automatically falls back to native `adb exec-out screencap -p` with zero configuration or errors. It is strictly optional!
+- **macOS**: `brew install scrcpy`
+- **Windows**: `winget install Genymobile.scrcpy` *(or `choco install scrcpy`)*
+- **Linux**: `sudo apt install -y scrcpy`
+
+### 4. Local Model Runner — **Optional (For Local Visual Perception & AI Assertions)**
+If you want local AI vision grounding or natural language screen assertions (`peep assert ...`):
+```bash
+# Any multimodal model via Ollama:
+ollama run llama3.2-vision
+# Or via llama.cpp, vLLM, LM Studio (OpenAI-compatible /v1 endpoint)
+```
+*(Remember: Standard apps are fully automated using Tier 0 native accessibility trees with 0 AI models and 0 tokens burned!)*
 
 ---
 
@@ -158,8 +232,7 @@ peep goal "Dismiss notification popup and open Settings" --max-steps 6
 # View total session token & cost savings
 peep stats
 
-# Connect to remote ADB server or Wi-Fi device on the fly
-peep doctor --adb-host 192.168.1.50 --adb-port 5037
+# Auto-connect to a Wi-Fi debugging device on the fly
 peep tap "Submit" --connect 192.168.1.100:5555
 ```
 
@@ -167,10 +240,10 @@ peep tap "Submit" --connect 192.168.1.100:5555
 
 ## 🔌 Coding Harness Integrations
 
-Peep drops into any coding harness via standard MCP configuration:
+Peep drops into any modern AI coding harness via standard MCP configuration. For each harness below, add the MCP server configuration and run the one-line terminal command to download the skill/rule directly from GitHub:
 
 ### 1. Google Antigravity 2.0
-In `~/.gemini/config/mcp_config.json`:
+In `~/.gemini/config/mcp_config.json` (or `.gemini/mcp_config.json` in your workspace):
 ```json
 {
   "mcpServers": {
@@ -186,7 +259,20 @@ In `~/.gemini/config/mcp_config.json`:
   }
 }
 ```
-*Native Skill*: Copy `configs/harnesses/antigravity/SKILL.md` to your Antigravity skills directory.
+*(Tip: To target a specific emulator like MuMu, add `"PEEP_DEVICE_ID": "localhost:7555"` to `env`. Omit for zero-config auto-detection).*
+
+**Install the `/peep` Slash Command directly from GitHub:**
+- **macOS / Linux**:
+  ```bash
+  mkdir -p ~/.gemini/config/skills/peep && curl -fsSL https://raw.githubusercontent.com/varmakarthik12/peep/main/configs/harnesses/antigravity/SKILL.md -o ~/.gemini/config/skills/peep/SKILL.md
+  ```
+- **Windows (PowerShell)**:
+  ```powershell
+  New-Item -ItemType Directory -Force -Path "$HOME\.gemini\config\skills\peep"; Invoke-WebRequest -Uri "https://raw.githubusercontent.com/varmakarthik12/peep/main/configs/harnesses/antigravity/SKILL.md" -OutFile "$HOME\.gemini\config\skills\peep\SKILL.md"
+  ```
+*(Or install into your project workspace by replacing `$HOME\.gemini\config\skills\peep` with `.agents\skills\peep`)*
+
+---
 
 ### 2. Cursor
 In `.cursor/mcp.json`:
@@ -195,19 +281,46 @@ In `.cursor/mcp.json`:
   "mcpServers": {
     "peep": {
       "command": "npx",
-      "args": ["-y", "peep-mcp", "serve"]
+      "args": ["-y", "peep-mcp", "serve"],
+      "env": {
+        "PEEP_PROVIDER_TYPE": "openai",
+        "PEEP_BASE_URL": "http://localhost:11434/v1",
+        "PEEP_MODEL": "auto"
+      }
     }
   }
 }
 ```
-Copy `configs/harnesses/cursor/rules.mdc` to `.cursor/rules/peep.mdc`.
+
+**Install Cursor Rule (`.cursor/rules/peep.mdc`) directly from GitHub:**
+- **macOS / Linux**:
+  ```bash
+  mkdir -p .cursor/rules && curl -fsSL https://raw.githubusercontent.com/varmakarthik12/peep/main/configs/harnesses/cursor/rules.mdc -o .cursor/rules/peep.mdc
+  ```
+- **Windows (PowerShell)**:
+  ```powershell
+  New-Item -ItemType Directory -Force -Path ".cursor\rules"; Invoke-WebRequest -Uri "https://raw.githubusercontent.com/varmakarthik12/peep/main/configs/harnesses/cursor/rules.mdc" -OutFile ".cursor\rules\peep.mdc"
+  ```
+
+---
 
 ### 3. Claude Desktop & Claude Code CLI
-In `claude_desktop_config.json` or via CLI:
+Add the MCP server via CLI:
 ```bash
 claude mcp add peep npx -y peep-mcp serve
 ```
-Copy `configs/harnesses/claude/CLAUDE.md` to your repository root.
+
+**Install project instructions (`CLAUDE.md`) directly from GitHub:**
+- **macOS / Linux**:
+  ```bash
+  curl -fsSL https://raw.githubusercontent.com/varmakarthik12/peep/main/configs/harnesses/claude/CLAUDE.md -o CLAUDE.md
+  ```
+- **Windows (PowerShell)**:
+  ```powershell
+  Invoke-WebRequest -Uri "https://raw.githubusercontent.com/varmakarthik12/peep/main/configs/harnesses/claude/CLAUDE.md" -OutFile "CLAUDE.md"
+  ```
+
+---
 
 ### 4. Windsurf Cascade
 In `mcp_config.json`:
@@ -216,12 +329,69 @@ In `mcp_config.json`:
   "mcpServers": {
     "peep": {
       "command": "npx",
-      "args": ["-y", "peep-mcp", "serve"]
+      "args": ["-y", "peep-mcp", "serve"],
+      "env": {
+        "PEEP_PROVIDER_TYPE": "openai",
+        "PEEP_BASE_URL": "http://localhost:11434/v1",
+        "PEEP_MODEL": "auto"
+      }
     }
   }
 }
 ```
-Copy `configs/harnesses/windsurf/windsurfrules.md` to `.windsurfrules`.
+
+**Install Windsurf Rules (`.windsurfrules`) directly from GitHub:**
+- **macOS / Linux**:
+  ```bash
+  curl -fsSL https://raw.githubusercontent.com/varmakarthik12/peep/main/configs/harnesses/windsurf/windsurfrules.md -o .windsurfrules
+  ```
+- **Windows (PowerShell)**:
+  ```powershell
+  Invoke-WebRequest -Uri "https://raw.githubusercontent.com/varmakarthik12/peep/main/configs/harnesses/windsurf/windsurfrules.md" -OutFile ".windsurfrules"
+  ```
+
+---
+
+### 5. Cline & Roo Code
+In `mcp_settings.json`:
+```json
+{
+  "mcpServers": {
+    "peep": {
+      "command": "npx",
+      "args": ["-y", "peep-mcp", "serve"],
+      "env": {
+        "PEEP_PROVIDER_TYPE": "openai",
+        "PEEP_BASE_URL": "http://localhost:11434/v1",
+        "PEEP_MODEL": "auto"
+      }
+    }
+  }
+}
+```
+
+**Download Custom Instructions directly from GitHub:**
+- **macOS / Linux**:
+  ```bash
+  curl -fsSL https://raw.githubusercontent.com/varmakarthik12/peep/main/configs/harnesses/cline_roocode/custom_instructions.md -o cline_peep_instructions.md
+  ```
+- **Windows (PowerShell)**:
+  ```powershell
+  Invoke-WebRequest -Uri "https://raw.githubusercontent.com/varmakarthik12/peep/main/configs/harnesses/cline_roocode/custom_instructions.md" -OutFile "cline_peep_instructions.md"
+  ```
+
+---
+
+### 6. GitHub Copilot (VS Code & JetBrains)
+**Install Instructions (`.github/copilot-instructions.md`) directly from GitHub:**
+- **macOS / Linux**:
+  ```bash
+  mkdir -p .github && curl -fsSL https://raw.githubusercontent.com/varmakarthik12/peep/main/configs/harnesses/copilot/copilot-instructions.md -o .github/copilot-instructions.md
+  ```
+- **Windows (PowerShell)**:
+  ```powershell
+  New-Item -ItemType Directory -Force -Path ".github"; Invoke-WebRequest -Uri "https://raw.githubusercontent.com/varmakarthik12/peep/main/configs/harnesses/copilot/copilot-instructions.md" -OutFile ".github\copilot-instructions.md"
+  ```
 
 ---
 
@@ -256,11 +426,9 @@ target:
 
   # Android-specific settings
   android:
-    deviceId: ""              # Target device ID (leave empty for auto-detection)
+    deviceId: ""              # Target device serial/socket (leave empty for auto-detection)
     adbPath: "adb"            # Path to adb binary
-    adbHost: ""               # Optional remote ADB server host (e.g. "192.168.1.50")
-    adbPort: 5037             # Optional remote ADB server port
-    connectAddress: ""        # Optional remote device IP:port to auto-connect (e.g. "192.168.1.100:5555")
+    connectAddress: ""        # Optional Wi-Fi device IP:port to auto-connect (e.g. "192.168.1.100:5555")
     scrcpyPath: "scrcpy"      # Optional scrcpy path
 
   # Browser-specific settings
@@ -320,15 +488,14 @@ logLevel: "info"              # 'debug', 'info', 'warn', 'error', 'silent'
 ##### Android Platform Settings (`target.android`)
 | Parameter | Env Variable | Type | Default | Optional? | Description |
 | :--- | :--- | :--- | :--- | :--- | :--- |
-| `deviceId` | `PEEP_DEVICE_ID` | `string` | `""` (auto) | Optional | Specific ADB device serial or socket. If empty, Peep auto-detects the first online device. |
+| `deviceId` | `PEEP_DEVICE_ID` | `string` | `""` (auto) | Optional | Specific ADB device serial or socket (e.g. `localhost:7555` or `emulator-5554`). If empty, Peep auto-detects the first online device. |
 | `adbPath` | `PEEP_ADB_PATH` | `string` | `"adb"` | Optional | Path or command name for the `adb` executable. |
-| `adbHost` | `PEEP_ADB_HOST` | `string` | `""` | Optional | Remote ADB daemon hostname or IP address (`adb -H <host>`). |
-| `adbPort` | `PEEP_ADB_PORT` | `number` | `5037` | Optional | Remote ADB daemon port (`adb -P <port>`). Default is 5037. |
-| `connectAddress` | `PEEP_CONNECT_ADDRESS`| `string` | `""` | Optional | Remote device network IP:port to automatically connect via `adb connect` (e.g. `"192.168.1.100:5555"`). |
+| `connectAddress` | `PEEP_CONNECT_ADDRESS`| `string` | `""` | Optional | Remote Wi-Fi device IP:port to automatically connect via `adb connect` (e.g. `"192.168.1.100:5555"`). |
 | `scrcpyPath` | `PEEP_SCRCPY_PATH` | `string` | `"scrcpy"` | Optional | Optional path to `scrcpy` binary for low-latency H.264 video streaming. |
 
 > [!TIP]
-> **Complete Android Guide**: For in-depth instructions on USB debugging, Wi-Fi pairing, multi-device setups, and remote ADB servers, see the [Android Device Setup & Troubleshooting Guide](docs/ANDROID_DEVICE_GUIDE.md).
+> **Complete Android Guide & Remote ADB Daemons**:
+> For in-depth instructions on USB debugging, Wi-Fi pairing, multi-device setups, and remote ADB daemons (`adbHost` / `adbPort`), see the [Android Device Setup & Troubleshooting Guide](docs/ANDROID_DEVICE_GUIDE.md).
 
 ###### Common Emulator Ports & Default Sockets
 
