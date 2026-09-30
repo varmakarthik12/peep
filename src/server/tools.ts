@@ -22,6 +22,37 @@ export function registerTools(
     return targetOrManager;
   };
 
+  const validateTarget = (
+    platform?: TargetPlatform
+  ): { target: BaseTarget; errorResponse?: { content: Array<{ type: "text"; text: string }> } } => {
+    const target = getTarget(platform);
+    if (target.isReady === false) {
+      return {
+        target,
+        errorResponse: {
+          content: [
+            {
+              type: "text",
+              text: JSON.stringify(
+                {
+                  status: "UNSUPPORTED_PLATFORM",
+                  platform: target.name,
+                  message:
+                    target.scaffoldNotice ||
+                    `Platform '${target.name}' is an architecture adapter scaffold planned for v0.2. In v0.1, the fully functional operational target is 'android' (ADB devices & emulators). For web apps, launch Chrome on the Android device and automate using platform: 'android'.`,
+                  activePlatforms: ["android"],
+                },
+                null,
+                2
+              ),
+            },
+          ],
+        },
+      };
+    }
+    return { target };
+  };
+
   // 1. peep_find_and_tap
   server.tool(
     "peep_find_and_tap",
@@ -37,7 +68,8 @@ export function registerTools(
     },
     async ({ target: targetDesc, strategy, context, platform }) => {
       logger.info(`[MCP:tap] Target: "${targetDesc}", Strategy: ${strategy}, Platform: ${platform || "default"}`);
-      const target = getTarget(platform as TargetPlatform);
+      const { target, errorResponse } = validateTarget(platform as TargetPlatform);
+      if (errorResponse) return errorResponse;
 
       // Tier 0/1: Try semantic tree if strategy allows
       if (strategy === "auto" || strategy === "tree_first" || strategy === "tree_only") {
@@ -160,7 +192,8 @@ export function registerTools(
     },
     async ({ text, target: targetDesc, clearFirst, platform }) => {
       logger.info(`[MCP:type] Text: "${text}", Target: ${targetDesc || "(active focus)"}`);
-      const target = getTarget(platform as TargetPlatform);
+      const { target, errorResponse } = validateTarget(platform as TargetPlatform);
+      if (errorResponse) return errorResponse;
 
       if (targetDesc) {
         if (target instanceof AndroidTarget) {
@@ -208,7 +241,9 @@ export function registerTools(
     },
     async ({ direction, distance, platform }) => {
       logger.info(`[MCP:swipe] Direction: ${direction}, Distance: ${distance}`);
-      const target = getTarget(platform as TargetPlatform);
+      const { target, errorResponse } = validateTarget(platform as TargetPlatform);
+      if (errorResponse) return errorResponse;
+
       const metrics = await target.getDisplayMetrics();
       const coords = GestureEngine.calculateSwipe(
         metrics.width,
@@ -245,7 +280,9 @@ export function registerTools(
     },
     async ({ key, platform }) => {
       logger.info(`[MCP:press] Key: ${key}`);
-      const target = getTarget(platform as TargetPlatform);
+      const { target, errorResponse } = validateTarget(platform as TargetPlatform);
+      if (errorResponse) return errorResponse;
+
       await target.pressKey(key);
       return {
         content: [
@@ -268,7 +305,9 @@ export function registerTools(
     },
     async ({ expectedState, platform }) => {
       logger.info(`[MCP:assert] Condition: "${expectedState}"`);
-      const target = getTarget(platform as TargetPlatform);
+      const { target, errorResponse } = validateTarget(platform as TargetPlatform);
+      if (errorResponse) return errorResponse;
+
       const frame = await target.captureScreenshot();
       const res = await provider.assertCondition(expectedState, frame.base64);
       const saved = tokenShield.recordShieldedScreenshot(60);
@@ -307,7 +346,9 @@ export function registerTools(
     },
     async ({ filterPattern, searchCrashes, limit, platform }) => {
       logger.info(`[MCP:logs] Filter: "${filterPattern || "*"}", CrashesOnly: ${searchCrashes}`);
-      const target = getTarget(platform as TargetPlatform);
+      const { target, errorResponse } = validateTarget(platform as TargetPlatform);
+      if (errorResponse) return errorResponse;
+
       const rawLogs = await target.getRecentLogs(filterPattern);
       const linesCount = rawLogs.length;
 
@@ -355,7 +396,9 @@ export function registerTools(
     },
     async ({ goal, maxSteps, platform }) => {
       logger.info(`[MCP:goal] Goal: "${goal}" (max ${maxSteps} steps)`);
-      const target = getTarget(platform as TargetPlatform);
+      const { target, errorResponse } = validateTarget(platform as TargetPlatform);
+      if (errorResponse) return errorResponse;
+
       const runner = new MacroRunner(provider, target, mapper);
       const result = await runner.runGoal(goal, maxSteps);
 

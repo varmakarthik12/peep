@@ -13,12 +13,15 @@ describe("Targets Factory & Adapters", () => {
     const target = createTarget({ type: "android", adbPath: "adb" }, dummyLogsConfig);
     expect(target).toBeInstanceOf(AndroidTarget);
     expect(target.name).toBe("android");
+    expect(target.isReady).toBe(true);
   });
 
   it("creates Browser target and verifies stub implementations", async () => {
     const target = createTarget({ type: "browser", adbPath: "adb" }, dummyLogsConfig);
     expect(target).toBeInstanceOf(BrowserTarget);
     expect(target.name).toBe("browser");
+    expect(target.isReady).toBe(false);
+    expect(target.scaffoldNotice).toContain("Browser target adapter is planned for v0.2");
 
     await expect(target.init()).rejects.toThrow(/Browser target adapter is planned for v0.2/);
     await expect(target.captureScreenshot()).rejects.toThrow(/Browser target not initialized/);
@@ -41,6 +44,8 @@ describe("Targets Factory & Adapters", () => {
     const target = createTarget({ type: "desktop", adbPath: "adb" }, dummyLogsConfig);
     expect(target).toBeInstanceOf(DesktopTarget);
     expect(target.name).toBe("desktop");
+    expect(target.isReady).toBe(false);
+    expect(target.scaffoldNotice).toContain("Desktop target adapter is planned for v0.2");
 
     await expect(target.init()).rejects.toThrow(/Desktop target adapter is planned for v0.2/);
     await expect(target.captureScreenshot()).rejects.toThrow(/Desktop target not initialized/);

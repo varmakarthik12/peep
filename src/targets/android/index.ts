@@ -10,6 +10,7 @@ import { logger } from "../../utils/logger.js";
 
 export class AndroidTarget extends BaseTarget {
   readonly name = "android";
+  override readonly isReady = true;
 
   private adb: AdbClient;
   private capture: ScreenCapture;

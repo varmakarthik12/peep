@@ -24,6 +24,8 @@ export interface ScreenFrame {
 
 export abstract class BaseTarget {
   abstract readonly name: string;
+  readonly isReady: boolean = true;
+  readonly scaffoldNotice?: string;
 
   abstract init(): Promise<void>;
   abstract getDisplayMetrics(forceRefresh?: boolean): Promise<DisplayMetrics>;

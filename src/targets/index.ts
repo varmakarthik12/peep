@@ -60,6 +60,12 @@ export class TargetManager {
     return Array.from(this.targets.keys());
   }
 
+  getActivePlatforms(): TargetPlatform[] {
+    return Array.from(this.targets.entries())
+      .filter(([_, t]) => t.isReady !== false)
+      .map(([p]) => p);
+  }
+
   async closeAll(): Promise<void> {
     for (const target of this.targets.values()) {
       try {

@@ -3,7 +3,7 @@ import pc from "picocolors";
 import { loadConfig } from "./config/index.js";
 import { startMcpServer } from "./server/index.js";
 import { createProvider } from "./providers/index.js";
-import { TargetManager, AndroidTarget } from "./targets/index.js";
+import { TargetManager, AndroidTarget, BaseTarget } from "./targets/index.js";
 import { CoordinateMapper } from "./core/coordinate-mapper.js";
 import { GestureEngine, SwipeDirection, SwipeDistance } from "./core/gesture-engine.js";
 import { MacroRunner } from "./core/macro-runner.js";
@@ -44,6 +44,69 @@ function getTargetManagerAndConfig(cmdOpts: Record<string, unknown> = {}) {
   const targetManager = new TargetManager(config.target, config.logs);
   const provider = createProvider(config.provider);
   return { config, targetManager, provider };
+}
+
+async function resolveAndInitTarget(
+  targetManager: TargetManager,
+  platform?: TargetPlatform,
+  isJson = false
+): Promise<BaseTarget> {
+  const target = targetManager.getTarget(platform);
+  if (target.isReady === false) {
+    if (isJson) {
+      console.log(
+        JSON.stringify(
+          {
+            status: "UNSUPPORTED_PLATFORM",
+            platform: target.name,
+            message: target.scaffoldNotice,
+            activePlatforms: ["android"],
+          },
+          null,
+          2
+        )
+      );
+    } else {
+      console.error(
+        pc.yellow(
+          `\n⚠️  [UNSUPPORTED PLATFORM] Platform '${target.name}' is currently an adapter scaffold planned for v0.2.`
+        )
+      );
+      if (target.scaffoldNotice) {
+        console.error(pc.dim(`   ${target.scaffoldNotice}`));
+      }
+      console.error(
+        pc.cyan(
+          `   💡 To test today, run with --platform android (or omit --platform to use the active default).\n`
+        )
+      );
+    }
+    process.exit(1);
+  }
+
+  try {
+    await target.init();
+    return target;
+  } catch (err) {
+    if (isJson) {
+      console.log(
+        JSON.stringify(
+          {
+            status: "INIT_FAILED",
+            platform: target.name,
+            error: err instanceof Error ? err.message : String(err),
+          },
+          null,
+          2
+        )
+      );
+    } else {
+      console.error(
+        pc.red(`\n✗ [TARGET INIT ERROR] ${err instanceof Error ? err.message : String(err)}\n`)
+      );
+    }
+    process.exit(1);
+  }
 }
 
 // 1. peep serve
@@ -156,41 +219,47 @@ program
       ? pc.green(`✓ ONLINE (${health.latencyMs}ms)`)
       : pc.red(`✗ OFFLINE (${health.error || "unreachable"})`);
 
-    // 2. Check Target & ADB
-    let targetStatus = pc.yellow("Pending");
-    let deviceDetails = "None";
-    let resolution = "Unknown";
+    // 2. Check Target Platforms
+    let allTargetsOk = true;
+    const targetRows: string[][] = [];
 
-    const target = targetManager.getPrimaryTarget();
-    try {
-      await target.init();
-      const metrics = await target.getDisplayMetrics();
-      targetStatus = pc.green("✓ CONNECTED");
-      resolution = `${metrics.width}x${metrics.height} (${metrics.rotation}° rotation)`;
-      if (target instanceof AndroidTarget) {
-        deviceDetails = config.target.android?.deviceId || config.target.deviceId || "Auto-detected active device";
-        if (config.target.android?.adbHost) {
-          deviceDetails += ` (Remote: ${config.target.android.adbHost}:${config.target.android.adbPort || 5037})`;
+    for (const platform of targetManager.getEnabledPlatforms()) {
+      const target = targetManager.getTarget(platform);
+      if (target.isReady !== false) {
+        let status = pc.yellow("Pending");
+        let details = "None";
+        try {
+          await target.init();
+          const metrics = await target.getDisplayMetrics();
+          status = pc.green(`✓ CONNECTED (${metrics.width}x${metrics.height})`);
+          if (target instanceof AndroidTarget) {
+            details = config.target.android?.deviceId || config.target.deviceId || "Auto-detected active device";
+            if (config.target.android?.adbHost) {
+              details += ` (${config.target.android.adbHost}:${config.target.android.adbPort || 5037})`;
+            }
+          }
+        } catch (err) {
+          allTargetsOk = false;
+          status = pc.red(`✗ ERROR (${err instanceof Error ? err.message : String(err)})`);
         }
+        targetRows.push([`Target Platform: ${platform} (Primary)`, target.name, details, status]);
+      } else {
+        const adapterDesc = platform === "browser" ? "Playwright / CDP scaffold" : "MSS / Display scaffold";
+        targetRows.push([`Target Platform: ${platform}`, adapterDesc, "Adapter scaffold", pc.dim("⏳ PLANNED (v0.2)")]);
       }
-    } catch (err) {
-      targetStatus = pc.red(`✗ ERROR (${err instanceof Error ? err.message : String(err)})`);
     }
-
-    const enabledPlatforms = targetManager.getEnabledPlatforms().join(", ");
 
     const rows = [
       ["Inference Provider", config.provider.type, health.vlmModel || health.slmModel || "auto", providerStatus],
       ["Provider Endpoint", config.provider.baseUrl, "-", health.ok ? pc.green("OK") : pc.red("FAIL")],
-      ["Target Platforms", enabledPlatforms, deviceDetails, targetStatus],
-      ["Display Metrics", resolution, "-", targetStatus.includes("✓") ? pc.green("OK") : pc.dim("-")],
+      ...targetRows,
     ];
 
     console.log(
       renderTable(["Component", "Type / Config", "Model / Identifier", "Status"], rows, "Diagnostics Summary")
     );
 
-    if (health.ok && targetStatus.includes("✓")) {
+    if (health.ok && allTargetsOk) {
       console.log(pc.green(pc.bold("\n✓ All systems operational! Peep is ready to shield tokens.\n")));
     } else {
       console.log(
@@ -216,8 +285,7 @@ program
   .option("--json", "Output result as JSON")
   .action(async (targetDesc: string, cmdOpts) => {
     const { config, targetManager, provider } = getTargetManagerAndConfig();
-    const target = targetManager.getTarget(cmdOpts.platform as TargetPlatform);
-    await target.init();
+    const target = await resolveAndInitTarget(targetManager, cmdOpts.platform as TargetPlatform, cmdOpts.json);
 
     const metrics = await target.getDisplayMetrics();
     const mapper = new CoordinateMapper(metrics, config.perception.coordinateScale);
@@ -294,8 +362,7 @@ program
   .option("--json", "Output result as JSON")
   .action(async (text: string, cmdOpts) => {
     const { targetManager } = getTargetManagerAndConfig();
-    const target = targetManager.getTarget(cmdOpts.platform as TargetPlatform);
-    await target.init();
+    const target = await resolveAndInitTarget(targetManager, cmdOpts.platform as TargetPlatform, cmdOpts.json);
 
     if (cmdOpts.target && target instanceof AndroidTarget) {
       const el = await target.findSemanticElement(cmdOpts.target);
@@ -338,8 +405,7 @@ program
     }
 
     const { targetManager } = getTargetManagerAndConfig();
-    const target = targetManager.getTarget(cmdOpts.platform as TargetPlatform);
-    await target.init();
+    const target = await resolveAndInitTarget(targetManager, cmdOpts.platform as TargetPlatform, cmdOpts.json);
 
     const metrics = await target.getDisplayMetrics();
     const coords = GestureEngine.calculateSwipe(
@@ -366,8 +432,7 @@ program
   .option("--json", "Output result as JSON")
   .action(async (key: string, cmdOpts) => {
     const { targetManager } = getTargetManagerAndConfig();
-    const target = targetManager.getTarget(cmdOpts.platform as TargetPlatform);
-    await target.init();
+    const target = await resolveAndInitTarget(targetManager, cmdOpts.platform as TargetPlatform, cmdOpts.json);
 
     try {
       await target.pressKey(key);
@@ -393,8 +458,7 @@ program
   .option("--json", "Output result as JSON")
   .action(async (condition: string, cmdOpts) => {
     const { targetManager, provider } = getTargetManagerAndConfig();
-    const target = targetManager.getTarget(cmdOpts.platform as TargetPlatform);
-    await target.init();
+    const target = await resolveAndInitTarget(targetManager, cmdOpts.platform as TargetPlatform, cmdOpts.json);
 
     const frame = await target.captureScreenshot();
     const res = await provider.assertCondition(condition, frame.base64);
@@ -434,8 +498,7 @@ program
   .option("--json", "Output result as JSON")
   .action(async (cmdOpts) => {
     const { targetManager, provider } = getTargetManagerAndConfig();
-    const target = targetManager.getTarget(cmdOpts.platform as TargetPlatform);
-    await target.init();
+    const target = await resolveAndInitTarget(targetManager, cmdOpts.platform as TargetPlatform, cmdOpts.json);
 
     await new Promise((r) => setTimeout(r, 600));
 
@@ -485,8 +548,7 @@ program
   .option("--json", "Output result as JSON")
   .action(async (task: string, cmdOpts) => {
     const { config, targetManager, provider } = getTargetManagerAndConfig();
-    const target = targetManager.getTarget(cmdOpts.platform as TargetPlatform);
-    await target.init();
+    const target = await resolveAndInitTarget(targetManager, cmdOpts.platform as TargetPlatform, cmdOpts.json);
 
     const metrics = await target.getDisplayMetrics();
     const mapper = new CoordinateMapper(metrics, config.perception.coordinateScale);

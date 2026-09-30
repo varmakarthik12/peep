@@ -74,4 +74,30 @@ describe("CLI End-to-End Execution", () => {
     const parsed = JSON.parse(stdout);
     expect(typeof parsed).toBe("object");
   });
+
+  it("handles unsupported platform cleanly with user notice", async () => {
+    try {
+      await execFileAsync("node", [CLI_PATH, "tap", "--platform", "browser", "Button"]);
+      expect.fail("Should have exited with code 1");
+    } catch (err: any) {
+      expect(err.code).toBe(1);
+      const combined = (err.stdout || "") + (err.stderr || "");
+      expect(combined).toContain("[UNSUPPORTED PLATFORM]");
+      expect(combined).toContain("browser");
+      expect(combined).not.toContain("Error:");
+    }
+  });
+
+  it("outputs structured JSON on unsupported platform with --json", async () => {
+    try {
+      await execFileAsync("node", [CLI_PATH, "swipe", "up", "--platform", "desktop", "--json"]);
+      expect.fail("Should have exited with code 1");
+    } catch (err: any) {
+      expect(err.code).toBe(1);
+      const parsed = JSON.parse(err.stdout || err.stderr);
+      expect(parsed.status).toBe("UNSUPPORTED_PLATFORM");
+      expect(parsed.platform).toBe("desktop");
+      expect(parsed.activePlatforms).toEqual(["android"]);
+    }
+  });
 });

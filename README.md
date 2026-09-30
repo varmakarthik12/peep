@@ -86,11 +86,11 @@ Peep implements a high-performance tiered fallback architecture:
 ## 🎯 Multi-Target Architecture (Enabled Simultaneously by Default)
 
 Unlike single-purpose tools, Peep features a unified `TargetManager` that supports **multiple targets enabled simultaneously**:
-- **Android**: ADB integration with local or remote servers, screen frame capture, `uiautomator` accessibility trees, and ring-buffered `logcat` monitoring.
-- **Browser**: Web automation adapter scaffold (Playwright / CDP) for web app validation.
-- **Desktop**: Desktop OS window control adapter scaffold (MSS / display capture).
+- **Android** *(Production Ready)*: ADB integration with local or remote servers, screen frame capture, `uiautomator` accessibility trees, and ring-buffered `logcat` monitoring.
+- **Browser** *(v0.2 Adapter Scaffold)*: Web automation adapter scaffold (Playwright / CDP) for web app validation.
+- **Desktop** *(v0.2 Adapter Scaffold)*: Desktop OS window control adapter scaffold (MSS / display capture).
 
-All enabled targets are active at startup. Tool calls auto-route to your primary active target, or you can pass an explicit `platform: "android" | "browser" | "desktop"` parameter.
+All enabled targets are active at startup. Tool calls auto-route to your primary active target (`defaultPlatform: "android"`), or an AI harness (such as Antigravity 2.0, Cursor, Claude Code, or Windsurf) can pass an explicit `platform: "android" | "browser" | "desktop"` parameter based on the context of the user request. If a scaffold target is requested, Peep responds with a clean, structured notification and guidance without crashing the agent loop.
 
 ---
 

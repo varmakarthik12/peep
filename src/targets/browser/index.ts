@@ -4,11 +4,12 @@ import { SwipeCoordinates } from "../../core/gesture-engine.js";
 
 export class BrowserTarget extends BaseTarget {
   readonly name = "browser";
+  override readonly isReady = false;
+  override readonly scaffoldNotice =
+    "Browser target adapter is planned for v0.2. To use Peep today, run with target: android (ADB / Emulator).";
 
   async init(): Promise<void> {
-    throw new Error(
-      "Browser target adapter is planned for v0.2. To use Peep today, run with target: android (ADB / Emulator)."
-    );
+    throw new Error(this.scaffoldNotice);
   }
 
   async getDisplayMetrics(): Promise<DisplayMetrics> {

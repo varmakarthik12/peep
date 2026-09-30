@@ -2,6 +2,7 @@ import { describe, it, expect, vi, beforeEach } from "vitest";
 import { registerTools } from "../src/server/tools.js";
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { AndroidTarget } from "../src/targets/android/index.js";
+import { TargetManager } from "../src/targets/index.js";
 import { BaseInferenceProvider } from "../src/providers/base.js";
 import { CoordinateMapper } from "../src/core/coordinate-mapper.js";
 import { tokenShield } from "../src/core/token-shield.js";
@@ -25,6 +26,7 @@ describe("MCP Server Tools Registration & Handlers", () => {
 
     mockTarget = Object.assign(Object.create(AndroidTarget.prototype), {
       name: "android",
+      isReady: true,
       init: vi.fn(),
       getDisplayMetrics: vi.fn().mockResolvedValue({ width: 1080, height: 2400, rotation: 0 }),
       captureScreenshot: vi.fn().mockResolvedValue({
@@ -264,6 +266,62 @@ describe("MCP Server Tools Registration & Handlers", () => {
       expect(data.totalActions).toBe(1);
       expect(data.screenshotsShielded).toBe(1);
       expect(data.cloudTokensSaved).toBe(1600);
+    });
+  });
+
+  describe("Platform Routing & Unsupported Target Handling", () => {
+    let multiTools: Record<string, Function> = {};
+
+    beforeEach(() => {
+      multiTools = {};
+      const server = {
+        tool: vi.fn((name: string, _desc: string, _schema: any, handler: Function) => {
+          multiTools[name] = handler;
+        }),
+      } as unknown as McpServer;
+
+      const multiTargetManager = new TargetManager(
+        { enabled: ["android", "browser", "desktop"], defaultPlatform: "android" },
+        { ringBufferSize: 1000, filterNoise: true, watchdog: false, maxAnomalyLines: 10 }
+      );
+
+      registerTools(server, multiTargetManager, mockProvider, mapper);
+    });
+
+    it("returns UNSUPPORTED_PLATFORM when peep_find_and_tap is called with platform: browser", async () => {
+      const res = await multiTools["peep_find_and_tap"]({
+        target: "Submit",
+        platform: "browser",
+      });
+
+      const data = JSON.parse(res.content[0].text);
+      expect(data.status).toBe("UNSUPPORTED_PLATFORM");
+      expect(data.platform).toBe("browser");
+      expect(data.message).toContain("Browser target adapter is planned for v0.2");
+      expect(data.activePlatforms).toEqual(["android"]);
+    });
+
+    it("returns UNSUPPORTED_PLATFORM when peep_swipe is called with platform: desktop", async () => {
+      const res = await multiTools["peep_swipe"]({
+        direction: "up",
+        platform: "desktop",
+      });
+
+      const data = JSON.parse(res.content[0].text);
+      expect(data.status).toBe("UNSUPPORTED_PLATFORM");
+      expect(data.platform).toBe("desktop");
+      expect(data.message).toContain("Desktop target adapter is planned for v0.2");
+    });
+
+    it("returns UNSUPPORTED_PLATFORM for peep_assert_screen_state on browser without throwing error", async () => {
+      const res = await multiTools["peep_assert_screen_state"]({
+        expectedState: "Dashboard loaded",
+        platform: "browser",
+      });
+
+      const data = JSON.parse(res.content[0].text);
+      expect(data.status).toBe("UNSUPPORTED_PLATFORM");
+      expect(data.platform).toBe("browser");
     });
   });
 });
