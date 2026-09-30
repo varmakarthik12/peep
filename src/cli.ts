@@ -20,6 +20,7 @@ program
   .version("0.1.0")
   .option("-c, --config <path>", "Path to peep.yaml config file")
   .option("--log-level <level>", "Log level: debug, info, warn, error, silent", "info")
+  .option("-d, --device <id>", "Explicit Android device/emulator serial ID (e.g. emulator-5554, 127.0.0.1:7555)")
   .option("--adb-host <host>", "Remote ADB server host (-H)")
   .option("--adb-port <port>", "Remote ADB server port (-P)")
   .option("--connect <address>", "Remote ADB device TCP connect address (e.g. 192.168.1.100:5555)");
@@ -28,9 +29,10 @@ function getTargetManagerAndConfig(cmdOpts: Record<string, unknown> = {}) {
   const opts = program.opts();
   const overrides: Record<string, unknown> = { logLevel: opts.logLevel };
 
-  if (opts.adbHost || opts.adbPort || opts.connect) {
+  if (opts.adbHost || opts.adbPort || opts.connect || opts.device) {
     overrides.target = {
       android: {
+        deviceId: opts.device,
         adbHost: opts.adbHost,
         adbPort: opts.adbPort ? parseInt(opts.adbPort, 10) : undefined,
         connectAddress: opts.connect,
@@ -50,11 +52,85 @@ program
   .description("Start the Peep MCP Server over stdio for AI coding harnesses")
   .action(async () => {
     const opts = program.opts();
-    const config = loadConfig(opts.config, { logLevel: opts.logLevel });
+    const overrides: Record<string, unknown> = { logLevel: opts.logLevel };
+    if (opts.adbHost || opts.adbPort || opts.connect || opts.device) {
+      overrides.target = {
+        android: {
+          deviceId: opts.device,
+          adbHost: opts.adbHost,
+          adbPort: opts.adbPort ? parseInt(opts.adbPort, 10) : undefined,
+          connectAddress: opts.connect,
+        },
+      };
+    }
+    const config = loadConfig(opts.config, overrides);
     await startMcpServer(config);
   });
 
-// 2. peep doctor
+// 2. peep devices
+program
+  .command("devices")
+  .description("List all attached Android devices/emulators and show connection status")
+  .option("--json", "Output device list as JSON")
+  .action(async (cmdOpts) => {
+    const { config } = getTargetManagerAndConfig();
+    const androidConfig = config.target.android || {};
+    const { AdbClient } = await import("./targets/android/adb-client.js");
+    const adb = new AdbClient({
+      adbPath: androidConfig.adbPath || config.target.adbPath || "adb",
+      deviceId: androidConfig.deviceId || config.target.deviceId,
+      host: androidConfig.adbHost,
+      port: androidConfig.adbPort,
+      connectAddress: androidConfig.connectAddress,
+    });
+
+    try {
+      const devices = await adb.listDevices();
+      if (cmdOpts.json) {
+        console.log(JSON.stringify(devices, null, 2));
+        return;
+      }
+
+      console.log(renderBanner());
+      console.log(pc.bold(pc.cyan("Attached Android Devices & Emulators:\n")));
+
+      if (devices.length === 0) {
+        console.log(pc.yellow("No devices or emulators detected via ADB."));
+        console.log(pc.dim("\nTips:"));
+        console.log(pc.dim("  - Physical devices: Enable USB Debugging in Developer Options on device"));
+        console.log(pc.dim("  - Emulators: Ensure emulator is running (e.g. MuMu on 127.0.0.1:7555, BlueStacks on 127.0.0.1:5555)"));
+        console.log(pc.dim("  - Wi-Fi Debugging: Connect via 'peep --connect <ip>:<port> devices'"));
+        return;
+      }
+
+      const configuredId = androidConfig.deviceId || config.target.deviceId;
+      const rows = devices.map((d) => {
+        const isSelected = configuredId ? d.id === configuredId : d.status === "device";
+        const tag = isSelected ? (configuredId ? pc.cyan(" [CONFIGURED]") : pc.green(" [AUTO-SELECTED]")) : "";
+        const statusDisplay =
+          d.status === "device"
+            ? pc.green("device (ready)")
+            : d.status === "unauthorized"
+            ? pc.red("unauthorized (check phone screen prompt)")
+            : pc.yellow(d.status);
+
+        return [
+          d.id + tag,
+          statusDisplay,
+          d.model || "-",
+          d.product || "-",
+        ];
+      });
+
+      console.log(renderTable(["Serial / Socket", "State", "Model", "Product"], rows, "Connected Devices"));
+      console.log(pc.dim(`\nTotal devices detected: ${devices.length}\n`));
+    } catch (err) {
+      console.error(pc.red(`Failed to query ADB devices: ${err instanceof Error ? err.message : String(err)}`));
+      process.exit(1);
+    }
+  });
+
+// 3. peep doctor
 program
   .command("doctor")
   .description("Run system health check for ADB, connected devices, and local inference backend")

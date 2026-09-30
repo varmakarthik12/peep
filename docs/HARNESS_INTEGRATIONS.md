@@ -252,7 +252,8 @@ peep logs --crashes
 | Symptom | Probable Cause | One-Line Fix |
 | :--- | :--- | :--- |
 | **`spawn npx ENOENT`** | Node.js / npm not found in harness PATH | Specify the absolute path to `node` and `peep-mcp` or install globally: `npm install -g peep-mcp` and set `"command": "peep"`. |
-| **`No Android devices connected`** | ADB daemon offline or device unauthorized | Run `adb devices` in terminal; ensure USB debugging prompt is accepted on phone/emulator. |
+| **`No Android devices connected`** | ADB daemon offline or device unauthorized | Run `npx peep-mcp devices`; ensure USB debugging prompt is accepted. See [Android Device Guide](ANDROID_DEVICE_GUIDE.md). |
+| **`ADB hangs or times out`** | `adbPort` set to emulator port (e.g. 7555) instead of ADB daemon port (5037) | Leave `adbPort` as 5037 (or omit) and set `PEEP_DEVICE_ID="localhost:7555"`. See [Android Device Guide](ANDROID_DEVICE_GUIDE.md). |
 | **`fetch failed (ECONNREFUSED 11434)`** | Local inference engine (Ollama/vLLM) not running | Run `ollama serve` or ensure your Docker container is up on port 11434 / 8000. |
 | **`Specified model not found`** | Model hasn't been loaded on endpoint | Pull/load your model, or set `model: "auto"` to automatically bind to the running model. |
 | **Harness hangs waiting for tool** | Stdio buffered or device command timed out | Check `peep doctor` output to confirm ADB and inference latencies are < 1000ms. |

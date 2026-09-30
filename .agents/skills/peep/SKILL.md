@@ -25,6 +25,7 @@ When the user invokes `/peep`, they want you to interact with or validate a peri
 - `/peep logs` or `/peep crashes`: Inspect recent logs, filter framework noise, and extract 3-line crash diagnostics.
 - `/peep goal "<multi-step goal>"`: Hand off a multi-step routine to the local autonomous micro-loop.
 - `/peep stats`: Retrieve cumulative session tokens and estimated dollar savings.
+- `/peep devices`: Inspect connected Android devices/emulators and verify active device selection.
 
 ---
 

@@ -128,6 +128,15 @@ npx peep-mcp doctor
 Peep can be run directly from PowerShell, Bash, Aider, or CI pipelines without an MCP client:
 
 ```bash
+# List all connected Android devices/emulators and connection status
+peep devices
+
+# Run system diagnostics & verify display resolution
+peep doctor
+
+# Target a specific device (by serial or emulator socket)
+peep -d localhost:7555 tap "Login Button"
+
 # Tap an element using local perception
 peep tap "Login Button"
 
@@ -149,7 +158,7 @@ peep goal "Dismiss notification popup and open Settings" --max-steps 6
 # View total session token & cost savings
 peep stats
 
-# Connect to remote ADB server or network device on the fly
+# Connect to remote ADB server or Wi-Fi device on the fly
 peep doctor --adb-host 192.168.1.50 --adb-port 5037
 peep tap "Submit" --connect 192.168.1.100:5555
 ```
@@ -311,12 +320,32 @@ logLevel: "info"              # 'debug', 'info', 'warn', 'error', 'silent'
 ##### Android Platform Settings (`target.android`)
 | Parameter | Env Variable | Type | Default | Optional? | Description |
 | :--- | :--- | :--- | :--- | :--- | :--- |
-| `deviceId` | `PEEP_DEVICE_ID` | `string` | `""` (auto) | Optional | Specific ADB device serial. If empty, Peep auto-detects the first online device. |
+| `deviceId` | `PEEP_DEVICE_ID` | `string` | `""` (auto) | Optional | Specific ADB device serial or socket. If empty, Peep auto-detects the first online device. |
 | `adbPath` | `PEEP_ADB_PATH` | `string` | `"adb"` | Optional | Path or command name for the `adb` executable. |
-| `adbHost` | `PEEP_ADB_HOST` | `string` | `""` | Optional | Remote ADB server hostname or IP address (`adb -H <host>`). |
-| `adbPort` | `PEEP_ADB_PORT` | `number` | `5037` | Optional | Remote ADB server port (`adb -P <port>`). |
+| `adbHost` | `PEEP_ADB_HOST` | `string` | `""` | Optional | Remote ADB daemon hostname or IP address (`adb -H <host>`). |
+| `adbPort` | `PEEP_ADB_PORT` | `number` | `5037` | Optional | Remote ADB daemon port (`adb -P <port>`). Default is 5037. |
 | `connectAddress` | `PEEP_CONNECT_ADDRESS`| `string` | `""` | Optional | Remote device network IP:port to automatically connect via `adb connect` (e.g. `"192.168.1.100:5555"`). |
 | `scrcpyPath` | `PEEP_SCRCPY_PATH` | `string` | `"scrcpy"` | Optional | Optional path to `scrcpy` binary for low-latency H.264 video streaming. |
+
+> [!TIP]
+> **Complete Android Guide**: For in-depth instructions on USB debugging, Wi-Fi pairing, multi-device setups, and remote ADB servers, see the [Android Device Setup & Troubleshooting Guide](docs/ANDROID_DEVICE_GUIDE.md).
+
+###### Common Emulator Ports & Default Sockets
+
+| Emulator / Target | Serial / Socket | Peep Configuration |
+| :--- | :--- | :--- |
+| **Android Studio AVD** | `emulator-5554` | Auto-detected, or `PEEP_DEVICE_ID="emulator-5554"` |
+| **MuMu Player 6 & 12** | `127.0.0.1:7555` or `localhost:7555` | `PEEP_DEVICE_ID="localhost:7555"` |
+| **BlueStacks 5** | `127.0.0.1:5555` | `PEEP_DEVICE_ID="127.0.0.1:5555"` |
+| **Nox Player** | `127.0.0.1:62001` | `PEEP_DEVICE_ID="127.0.0.1:62001"` |
+| **LDPlayer 9** | `127.0.0.1:5555` | `PEEP_DEVICE_ID="127.0.0.1:5555"` |
+| **Genymotion** | `127.0.0.1:6555` | `PEEP_DEVICE_ID="127.0.0.1:6555"` |
+| **Physical Phone (USB)** | Alphanumeric (e.g. `RF8M10XXXXX`) | Auto-detected, or `PEEP_DEVICE_ID="RF8M10XXXXX"` |
+| **Wi-Fi Debugging** | `<device_ip>:<port>` | `PEEP_CONNECT_ADDRESS="192.168.1.100:5555"` |
+
+> [!WARNING]
+> **ADB Daemon Port vs Device Socket**:
+> `adbPort` (default `5037`) is the port of the background **ADB Server Daemon**. The emulator socket (e.g., `7555` for MuMu or `5555` for BlueStacks) is the **`deviceId`**, **not** the `adbPort`. Setting `adbPort: 7555` instructs ADB to look for the server daemon on port 7555 and will hang. Keep `adbPort` at `5037` (or omit it) and set `deviceId: "localhost:7555"`.
 
 ##### Browser Platform Settings (`target.browser`)
 | Parameter | Env Variable | Type | Default | Optional? | Description |
@@ -369,6 +398,7 @@ logLevel: "info"              # 'debug', 'info', 'warn', 'error', 'silent'
 
 ## 📚 Documentation
 
+- [Android Device Setup & Troubleshooting Guide](docs/ANDROID_DEVICE_GUIDE.md)
 - [System Architecture Specification](docs/ARCHITECTURE.md)
 - [Empirical Benchmarks & Token Calculus](docs/BENCHMARKS.md)
 - [Harness Integration Guides](docs/HARNESS_INTEGRATIONS.md)
