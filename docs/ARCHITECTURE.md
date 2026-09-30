@@ -6,7 +6,7 @@ This document details the internal design, perception cascade, coordinate geomet
 
 ## 1. System Vision & The Token Shield Boundary
 
-In modern agentic coding workflows, the frontier model powering your harness (e.g. Gemini 2.0 Pro, Claude 3.7 Sonnet, GPT-4o) acts as the **Principal Engineer**. Its primary strengths are high-level software architecture, deep reasoning across codebases, multi-file synthesis, and formal test intentions (`verifyCheckoutFlow()`).
+In modern agentic coding workflows, the frontier model powering your harness acts as the **Principal Engineer**. Its primary strengths are high-level software architecture, deep reasoning across codebases, multi-file synthesis, and formal test intentions (`verifyCheckoutFlow()`).
 
 Requiring the Principal Engineer to perform low-level peripheral tasks (pixel inspection, physical coordinate resolution, logcat streaming) is an architectural anti-pattern:
 1. **Multimodal Token Burn**: Each 1080×2400 screen frame consumes 1,600 to 2,500 tokens. A 10-step UI smoke test consumes 25,000+ vision tokens.

@@ -12,7 +12,7 @@
 
 ## ⚡ The Problem: The $400/hr Context Trap
 
-If you've ever watched a frontier agent like **Claude 3.7 Sonnet**, **Gemini 2.0 Pro**, or **GPT-4o** automate mobile tests or debug a connected Android device, you've witnessed an expensive paradox:
+If you've ever watched a frontier cloud model automate mobile tests or debug a connected Android device, you've witnessed an expensive paradox:
 
 You are paying for a world-class reasoning model (the equivalent of a **Staff / Principal Software Architect** earning $400/hr) to do two things it was never meant to do:
 

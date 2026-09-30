@@ -6,7 +6,7 @@ This document provides an engineering-grade breakdown of the token economics, at
 
 ## 1. Executive Summary
 
-When AI coding agents (Claude 3.7 Sonnet, Gemini 2.0 Pro, GPT-4o) interact directly with mobile devices or system logs, they are forced to consume massive multimodal screenshot payloads and noisy log dumps. 
+When frontier coding agents interact directly with mobile devices or system logs, they are forced to consume massive multimodal screenshot payloads and noisy log dumps. 
 
 Peep acts as an intelligent intermediary. By delegating raw visual grounding, coordinate translation, and log noise reduction to local models (Ollama, llama.cpp, vLLM) and native UI accessibility trees, Peep slashes token consumption by **95% to 99.6%**.
 

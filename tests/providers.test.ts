@@ -26,8 +26,8 @@ describe("Inference Providers", () => {
       const provider2 = createProvider({
         type: "openai",
         baseUrl: "https://api.openai.com/v1/",
-        vlmModel: "gpt-4o",
-        slmModel: "gpt-4o-mini",
+        vlmModel: "mock-vision-model",
+        slmModel: "mock-text-model",
         timeoutMs: 30000,
         temperature: 0.1,
       }) as OpenAICompatibleProvider;

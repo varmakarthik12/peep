@@ -19,7 +19,7 @@ export class TokenShield {
   private cloudTokensSaved = 0;
   private cloudTokensUsed = 0;
 
-  // Industry averages for Cloud Multimodal Models (Gemini Pro, Claude Sonnet, GPT-4o)
+  // Industry averages for Frontier Cloud Multimodal Models
   public static readonly TOKENS_PER_IMAGE = 1600;
   public static readonly TOKENS_PER_LOG_LINE = 14;
   public static readonly COST_PER_1M_CLOUD_TOKENS = 5.0; // $5.00 per million tokens
