@@ -22,7 +22,7 @@ describe("CLI End-to-End Execution", () => {
 
   it("prints version with -V or --version", async () => {
     const { stdout } = await execFileAsync("node", [CLI_PATH, "--version"]);
-    expect(stdout.trim()).toBe("0.2.0");
+    expect(stdout.trim()).toBe("0.3.0");
   });
 
   it("executes benchmark command and renders token savings comparison table", async () => {

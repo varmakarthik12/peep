@@ -6,6 +6,37 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ---
 
+## [0.3.0] - 2026-09-30
+
+### ⚡ Root & LSPosed Developer Suite & Multi-OS CI Hardening
+
+Version 0.3.0 introduces a dedicated, high-privilege **Root & LSPosed Developer Suite** (expanding Peep to **31 MCP tools** total), engineered specifically for advanced Android engineers, system modders, and security researchers working with Magisk, KernelSU, APatch, and LSPosed/Xposed framework hooks. Additionally, this release hardens cross-platform CI matrix testing across Ubuntu, macOS (arm64), and Windows runners on Node 20 & 22.
+
+---
+
+### ✨ Added — Root & LSPosed Developer Suite (8 New Tools, 31 Total)
+
+- **`peep_force_stop_process`**: Exterminates stubborn application processes, persistent system services, and detached native daemons matching PID or package name using `am force-stop` + `pgrep -f` + root `kill -9`.
+- **`peep_restart_app`**: Hot-restarts application in one atomic call, completely exterminating detached worker daemons and verifying launch stability via the synchronous crash watchdog.
+- **`peep_restart_system_service`**: Restarts core system services without performing slow device hardware reboots (`zygote` reloads all LSPosed/Xposed framework hooks in ~1.5s; `systemui` in ~1.2s; `soft_reboot` in ~2s).
+- **`peep_execute_root_command`**: Executes privileged shell commands with root access (`uid=0`) via `su -c` or root `adbd`.
+- **`peep_manage_selinux`**: Inspects (`getenforce`) or alters SELinux enforcement mode (`permissive` / `enforcing`) for `avc: denied` audit log debugging.
+- **`peep_list_processes`**: Privileged process enumeration returning PID, PPID, user, CPU, memory metrics, and regex filtering.
+- **`peep_toggle_component`**: Enables or disables individual Activities, BroadcastReceivers, and Services (`pm enable/disable`) with root override.
+- **`peep_manage_system_properties`**: Retrieves or modifies Android system properties (`getprop` / `setprop`).
+
+---
+
+### 🛡️ Infrastructure & CI Stability
+
+- **Active Node Support Matrix**: Aligned GitHub Actions CI matrix strictly to Node 20 and 22 LTS, enforcing `"engines": { "node": ">=20.0.0" }`.
+- **Pinned TypeScript Compatibility**: Pinned TypeScript to `^5.9.3` to ensure zero-defect `tsup` rollup declaration bundling (`dist/index.d.ts`, `dist/cli.d.ts`).
+- **Zod 4 Schema Hardening**: Migrated configuration schemas to `.prefault({})` and explicit key/value record definitions (`z.record(z.string(), ...)`).
+- **Headless Windows Runner Resilience**: Added CI fast-path and 2.5s execution timeouts to PowerShell display queries in `DesktopTarget`, eliminating runner timeouts on display-less VMs.
+- **Release Workflow Hardening**: Fixed GitHub Actions secret context parsing in `.github/workflows/release.yml`.
+
+---
+
 ## [0.2.0] - 2026-09-30
 
 ### 🚀 Target Expansion, OS Domination & The Strict Anti-Raw-ADB Shield

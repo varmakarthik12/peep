@@ -17,7 +17,7 @@ const program = new Command();
 program
   .name("peep")
   .description("Peripheral Evaluation & Execution Proxy: The Open-Source Token Shield for Autonomous Agents")
-  .version("0.2.0")
+  .version("0.3.0")
   .option("-c, --config <path>", "Path to peep.yaml config file")
   .option("--log-level <level>", "Log level: debug, info, warn, error, silent", "info")
   .option("-d, --device <id>", "Explicit Android device/emulator serial ID (e.g. emulator-5554, 127.0.0.1:7555)")
