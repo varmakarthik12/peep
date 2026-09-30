@@ -4,6 +4,8 @@ import {
   AssertionResult,
   LogSummaryResult,
   MacroActionStep,
+  ScreenAnalysisResult,
+  KeyElementInfo,
 } from "./base.js";
 import { InferenceProviderConfig } from "../config/schema.js";
 import { logger } from "../utils/logger.js";
@@ -379,4 +381,130 @@ Respond ONLY with a valid JSON object:
       action: "fail",
     };
   }
+
+  async analyzeScreen(
+    imageBase64: string,
+    userPrompt?: string,
+    focus: "all" | "scroll_state" | "elements" | "text" | "custom" = "all"
+  ): Promise<ScreenAnalysisResult> {
+    const prompt = `You are a high-precision mobile/desktop UI visual perception engine.
+Analyze the provided screen image thoroughly without executing actions.
+Focus area: "${focus}".
+${userPrompt ? `Specific question/objective: "${userPrompt}"` : ""}
+
+Respond ONLY with a valid JSON object in this exact format:
+{
+  "screenSummary": "Concise 1-2 sentence description of current screen/dialog/state",
+  "scrollState": {
+    "isScrollable": true,
+    "position": "top", // "top" | "middle" | "bottom" | "unknown"
+    "canScrollUp": false,
+    "canScrollDown": true,
+    "scrollbarVisible": false
+  },
+  "visibleKeyElements": [
+    {
+      "label": "Element name or visible text",
+      "type": "button", // "button" | "input" | "text" | "icon" | "list_item" | "header"
+      "location": "header", // "header" | "footer" | "content" | "navigation" | "overlay" | "unknown"
+      "point": [500, 200] // normalized center coordinates [0-1000]
+    }
+  ],
+  "hasActiveOverlay": false,
+  "hasKeyboard": false,
+  "confidence": 0.95
 }
+Notes:
+- "position" should be:
+  * "top" if content is at the top or cannot scroll up
+  * "bottom" if content is at the end or cannot scroll down
+  * "middle" if both canScrollUp and canScrollDown are true
+  * "unknown" if not scrollable or unable to determine
+- "point" are normalized coordinates [0-1000] for element centers if identifiable.
+- Set "hasActiveOverlay" to true if a modal, dialog, permission prompt, or popup is currently active.
+- Set "hasKeyboard" to true if an on-screen soft keyboard is currently visible.`;
+
+    const messages = [
+      {
+        role: "user",
+        content: [
+          { type: "text", text: prompt },
+          {
+            type: "image_url",
+            image_url: { url: `data:image/png;base64,${imageBase64}` },
+          },
+        ],
+      },
+    ];
+
+    try {
+      const raw = await this.callChat(this.visionModel, messages, true);
+      const parsed = this.cleanAndParseJson(raw);
+      if (!parsed) {
+        return {
+          screenSummary: raw.trim().slice(0, 200) || "Unable to parse screen analysis",
+          scrollState: {
+            isScrollable: false,
+            position: "unknown",
+            canScrollUp: false,
+            canScrollDown: false,
+          },
+          visibleKeyElements: [],
+          hasActiveOverlay: false,
+          confidence: 0.5,
+        };
+      }
+
+      const scrollRaw = (parsed.scrollState as Record<string, unknown>) || {};
+      const scrollPos = ["top", "middle", "bottom", "unknown"].includes(String(scrollRaw.position))
+        ? (String(scrollRaw.position) as "top" | "middle" | "bottom" | "unknown")
+        : "unknown";
+
+      const keyElements: KeyElementInfo[] = Array.isArray(parsed.visibleKeyElements)
+        ? (parsed.visibleKeyElements as Array<Record<string, unknown>>)
+            .map((el) => ({
+              label: String(el.label || ""),
+              type: el.type ? String(el.type) : undefined,
+              location: ["header", "footer", "content", "navigation", "overlay", "unknown"].includes(
+                String(el.location)
+              )
+                ? (String(el.location) as any)
+                : undefined,
+              point: this.parseNormalizedPoint(el.point),
+            }))
+            .filter((el) => Boolean(el.label))
+        : [];
+
+      return {
+        screenSummary: String(parsed.screenSummary || "Screen analysis completed"),
+        scrollState: {
+          isScrollable: Boolean(scrollRaw.isScrollable),
+          position: scrollPos,
+          canScrollUp: Boolean(scrollRaw.canScrollUp),
+          canScrollDown: Boolean(scrollRaw.canScrollDown),
+          scrollbarVisible:
+            typeof scrollRaw.scrollbarVisible === "boolean" ? scrollRaw.scrollbarVisible : undefined,
+        },
+        visibleKeyElements: keyElements,
+        hasActiveOverlay: Boolean(parsed.hasActiveOverlay),
+        hasKeyboard: typeof parsed.hasKeyboard === "boolean" ? parsed.hasKeyboard : undefined,
+        confidence: typeof parsed.confidence === "number" ? parsed.confidence : 0.8,
+      };
+    } catch (err) {
+      logger.warn(`Screen analysis inference error: ${err instanceof Error ? err.message : String(err)}`);
+      return {
+        screenSummary: "Screen analysis failed due to inference error",
+        scrollState: {
+          isScrollable: false,
+          position: "unknown",
+          canScrollUp: false,
+          canScrollDown: false,
+        },
+        visibleKeyElements: [],
+        hasActiveOverlay: false,
+        confidence: 0,
+      };
+    }
+  }
+}
+

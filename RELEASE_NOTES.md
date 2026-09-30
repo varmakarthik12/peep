@@ -1,32 +1,24 @@
-# 🛡️ Peep v0.3.0 — Root & LSPosed Developer Suite Release
-
-We are excited to announce the release of **Peep v0.3.0 (Peripheral Evaluation & Execution Proxy)**: The Open-Source Token Shield for AI Coding Harnesses.
+# 🛡️ Peep v0.4.0 — Pure Visual Analysis & Scroll Perception Suite
+ 
+We are excited to announce the release of **Peep v0.4.0 (Peripheral Evaluation & Execution Proxy)**: The Open-Source Token Shield for AI Coding Harnesses.
 
 Peep offloads mobile visual perception, coordinate grounding, autonomous micro-loops, app lifecycle management, and noisy log analysis to local models (Ollama, vLLM, llama.cpp) and deterministic accessibility hierarchies—slashing cloud token consumption by **95% to 99.6%** across **Antigravity 2.0, Cursor, Claude Code, Windsurf, Cline, and GitHub Copilot**.
 
 ---
 
-### 🚀 What's New in v0.3.0
+### 🚀 What's New in v0.4.0
 
-- **Root & LSPosed Developer Suite (8 New Tools, 31 MCP Tools Total)**:
-  - `peep_force_stop_process`: Force kills stubborn apps, persistent daemons, and detached background services using PID or package matching (`am force-stop` + `pgrep -f` + root `kill -9`).
-  - `peep_restart_app`: Atomic app restart exterminating background worker threads and verifying startup via the crash watchdog.
-  - `peep_restart_system_service`: Instant reload of Android OS services (`zygote` for LSPosed hook updates in ~1.5s, `systemui` in ~1.2s, `soft_reboot` in ~2s) avoiding physical hardware reboots.
-  - `peep_execute_root_command`: Root execution via `su -c` or root adbd with exit code verification.
-  - `peep_manage_selinux`: Query or toggle SELinux (`permissive`/`enforcing`) for debugging AVC denial logs.
-  - `peep_list_processes`: Detailed process enumeration with PID, PPID, user, CPU, memory metrics, and regex filtering.
-  - `peep_toggle_component`: Dynamic enable/disable of Activities, Receivers, and Services with root override.
-  - `peep_manage_system_properties`: Get and set Android system properties (`setprop`/`getprop`).
-- **Enterprise Multi-OS CI Matrix Hardening**:
-  - Full matrix test coverage across Node 20 & 22 on Ubuntu, macOS (arm64), and Windows runners (100% green).
-  - Pinned TypeScript 5.9.3 to ensure zero-defect `tsup` declaration bundle generation (`rollup-plugin-dts`).
-  - Migrated Zod schemas to `.prefault({})` and typed record structures for forward compatibility.
-  - Resolved Windows headless runner display detection hangs with CI detection and child process execution timeouts.
-  - Hardened GitHub Actions release workflow secret evaluation.
-- **Previous v0.2.0 Features**:
-  - Multi-target engine (Android, Browser, Desktop, iOS simultaneous support).
-  - 15 core domain tools (`peep_launch_app`, `peep_stop_app`, `peep_install_app`, etc.).
-  - Strict Anti-Raw-ADB Shield across all harness skills and rules.
+- **Pure Visual Analysis Suite (2 New Tools, 33 MCP Tools Total)**:
+  - `peep_locate_element`: Non-mutating UI element locator leveraging Tier 0 accessibility hierarchy or Tier 2 local vision. Returns element existence, physical bounding boxes, center click coordinates, and confidence scores without tapping or altering screen state.
+  - `peep_analyze_screen`: Non-destructive screen layout and scroll state inspection. Uses local VLM or accessibility tree fallback to deliver high-level screen summaries, scroll position (`top`, `middle`, `bottom`), vertical scrollability indicators (`isScrollable`, `canScrollUp`, `canScrollDown`, `scrollbarVisible`), active modal/dialog overlays, and major UI landmarks.
+- **Scroll State Detection**:
+  - Deterministic Tier 0 scrollability extraction from Android's `uiautomator` tree (`@_scrollable`).
+  - Structured vision provider analysis for scroll position and landmark extraction.
+- **CLI Commands**:
+  - `peep locate <target>`: Rapidly locate UI element coordinates from the command line.
+  - `peep analyze [prompt]`: Inspect screen composition and scroll posture with optional prompt focus.
+- **Root & LSPosed Developer Suite (from v0.3.0)**:
+  - `peep_force_stop_process`, `peep_restart_app`, `peep_restart_system_service`, `peep_execute_root_command`, `peep_manage_selinux`, `peep_list_processes`, `peep_toggle_component`, `peep_manage_system_properties`.
 
 ---
 

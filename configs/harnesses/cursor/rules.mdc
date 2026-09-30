@@ -36,6 +36,8 @@ When automating Android apps, running mobile UI smoke tests, or investigating de
 - `peep_clipboard(action="set|get|paste", text="...")`: Safe clipboard operations.
 
 ### Perception & Gestures
+- `peep_locate_element(target="...", strategy="auto")`: Locates element bounds and coordinates without executing a tap.
+- `peep_analyze_screen(prompt="...", focus="all|scroll_state|elements")`: Non-destructive visual analysis of screen layout, scroll state (top/middle/bottom), and landmarks.
 - `peep_find_and_tap(target="...", strategy="auto")`: Taps element. Automatically checks UI accessibility tree first (~15ms, 0 tokens), then falls back to local vision model.
 - `peep_type_text(target="...", text="...", clearFirst=true)`: Focuses field and types text.
 - `peep_swipe(direction="up|down|left|right", distance="short|medium|long")`: Directional swipe gestures.

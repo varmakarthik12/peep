@@ -137,6 +137,7 @@ describe("MCP Server Tools Registration & Handlers", () => {
         action: "done",
         thought: "Goal reached",
       }),
+      analyzeScreen: vi.fn(),
     } as unknown as BaseInferenceProvider;
 
     mapper = new CoordinateMapper({ width: 1080, height: 2400 });
@@ -147,6 +148,8 @@ describe("MCP Server Tools Registration & Handlers", () => {
   it("registers all 31 Peep MCP tools (including Root & LSPosed Developer Suite)", () => {
     const expectedTools = [
       "peep_find_and_tap",
+      "peep_locate_element",
+      "peep_analyze_screen",
       "peep_type_text",
       "peep_swipe",
       "peep_press_key",
@@ -179,7 +182,7 @@ describe("MCP Server Tools Registration & Handlers", () => {
       "peep_system_properties",
     ];
 
-    expect(Object.keys(tools)).toHaveLength(31);
+    expect(Object.keys(tools)).toHaveLength(33);
     for (const name of expectedTools) {
       expect(tools[name]).toBeDefined();
     }
@@ -255,6 +258,134 @@ describe("MCP Server Tools Registration & Handlers", () => {
       const data = JSON.parse(res.content[0].text);
       expect(data.status).toBe("NOT_FOUND");
       expect(data.method).toBe("tree_only");
+    });
+  });
+
+  describe("peep_locate_element", () => {
+    it("locates element in semantic tree without executing tap", async () => {
+      mockTarget.findSemanticElement = vi.fn().mockResolvedValue({
+        text: "Save",
+        id: "com.example:id/btn_save",
+        bounds: { left: 100, top: 200, right: 300, bottom: 400 },
+        clickable: true,
+        scrollable: false,
+      });
+
+      const res = await tools["peep_locate_element"]({
+        target: "Save",
+        strategy: "auto",
+      });
+
+      expect(mockTarget.tap).not.toHaveBeenCalled();
+      const data = JSON.parse(res.content[0].text);
+      expect(data.status).toBe("SUCCESS");
+      expect(data.found).toBe(true);
+      expect(data.method).toBe("tier0_semantic_tree");
+      expect(data.point).toEqual([200, 300]);
+      expect(data.box).toEqual({ left: 100, top: 200, right: 300, bottom: 400 });
+      expect(data.cloudTokensSaved).toBeGreaterThan(0);
+    });
+
+    it("falls back to local VLM for element location without tapping", async () => {
+      mockTarget.findSemanticElement = vi.fn().mockResolvedValue(null);
+      mockProvider.groundElement = vi.fn().mockResolvedValue({
+        found: true,
+        point: { x: 500, y: 500 },
+        confidence: 0.92,
+        thought: "Located icon near center",
+      });
+
+      const res = await tools["peep_locate_element"]({
+        target: "Profile icon",
+        strategy: "auto",
+      });
+
+      expect(mockTarget.tap).not.toHaveBeenCalled();
+      const data = JSON.parse(res.content[0].text);
+      expect(data.status).toBe("SUCCESS");
+      expect(data.found).toBe(true);
+      expect(data.method).toBe("tier2_local_vlm");
+      expect(data.confidence).toBe(0.92);
+      expect(data.cloudTokensSaved).toBeGreaterThan(0);
+    });
+
+    it("returns NOT_FOUND when element cannot be located in tree or VLM", async () => {
+      mockTarget.findSemanticElement = vi.fn().mockResolvedValue(null);
+      mockProvider.groundElement = vi.fn().mockResolvedValue({
+        found: false,
+        thought: "Element not visible",
+      });
+
+      const res = await tools["peep_locate_element"]({
+        target: "Missing item",
+        strategy: "auto",
+      });
+
+      const data = JSON.parse(res.content[0].text);
+      expect(data.status).toBe("NOT_FOUND");
+      expect(data.found).toBe(false);
+    });
+  });
+
+  describe("peep_analyze_screen", () => {
+    it("analyzes screen via local vision model and returns structured visual assessment", async () => {
+      mockProvider.analyzeScreen = vi.fn().mockResolvedValue({
+        screenSummary: "Settings overview page with connectivity options",
+        scrollState: {
+          isScrollable: true,
+          position: "top",
+          canScrollUp: false,
+          canScrollDown: true,
+          scrollbarVisible: true,
+        },
+        visibleKeyElements: [
+          { label: "Wi-Fi", type: "list_item", point: { x: 500, y: 200 } },
+          { label: "Bluetooth", type: "list_item", point: { x: 500, y: 350 } },
+        ],
+        hasActiveOverlay: false,
+        confidence: 0.95,
+      });
+
+      const res = await tools["peep_analyze_screen"]({
+        prompt: "Check scroll position and items",
+        focus: "all",
+        useLocalVision: true,
+      });
+
+      const data = JSON.parse(res.content[0].text);
+      expect(data.status).toBe("SUCCESS");
+      expect(data.method).toBe("local_vlm");
+      expect(data.screenSummary).toContain("Settings overview page");
+      expect(data.scrollState.position).toBe("top");
+      expect(data.scrollState.canScrollDown).toBe(true);
+      expect(data.visibleKeyElements).toHaveLength(2);
+      expect(data.cloudTokensSaved).toBeGreaterThan(0);
+    });
+
+    it("synthesizes screen analysis from semantic hierarchy when useLocalVision is false", async () => {
+      mockTarget.getSemanticHierarchy = vi.fn().mockResolvedValue([
+        {
+          id: "com.example:id/list",
+          scrollable: true,
+          bounds: { left: 0, top: 0, right: 1080, bottom: 1920 },
+        },
+        {
+          text: "Item 1",
+          clickable: true,
+          bounds: { left: 100, top: 100, right: 500, bottom: 200 },
+        },
+      ]);
+
+      const res = await tools["peep_analyze_screen"]({
+        useLocalVision: false,
+      });
+
+      expect(mockProvider.analyzeScreen).not.toHaveBeenCalled();
+      const data = JSON.parse(res.content[0].text);
+      expect(data.status).toBe("SUCCESS");
+      expect(data.method).toBe("tier0_semantic_tree");
+      expect(data.scrollState.isScrollable).toBe(true);
+      expect(data.visibleKeyElements.length).toBeGreaterThan(0);
     });
   });
 

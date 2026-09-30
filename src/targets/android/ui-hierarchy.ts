@@ -63,9 +63,10 @@ export class UiHierarchyParser {
           const resourceId = String(node["@_resource-id"] || "").trim();
           const className = String(node["@_class"] || "").trim();
           const clickable = node["@_clickable"] === "true" || node["@_clickable"] === true;
+          const scrollable = node["@_scrollable"] === "true" || node["@_scrollable"] === true;
 
-          // Keep nodes that have identifying semantics or are clickable
-          if (text || contentDesc || resourceId || clickable) {
+          // Keep nodes that have identifying semantics, are clickable, or are scrollable
+          if (text || contentDesc || resourceId || clickable || scrollable) {
             elements.push({
               id: resourceId || undefined,
               text: text || undefined,
@@ -73,6 +74,7 @@ export class UiHierarchyParser {
               className: className || undefined,
               bounds: { left, top, right, bottom },
               clickable,
+              scrollable,
             });
           }
         }

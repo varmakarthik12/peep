@@ -21,6 +21,31 @@ export interface LogSummaryResult {
   stackSnippet?: string;
 }
 
+export interface ScrollStateEstimate {
+  isScrollable: boolean;
+  position: "top" | "middle" | "bottom" | "unknown";
+  canScrollUp: boolean;
+  canScrollDown: boolean;
+  scrollbarVisible?: boolean;
+}
+
+export interface KeyElementInfo {
+  label: string;
+  type?: string;
+  location?: "header" | "footer" | "content" | "navigation" | "overlay" | "unknown";
+  point?: NormalizedPoint;
+  box?: BoundingBox;
+}
+
+export interface ScreenAnalysisResult {
+  screenSummary: string;
+  scrollState: ScrollStateEstimate;
+  visibleKeyElements: KeyElementInfo[];
+  hasActiveOverlay: boolean;
+  hasKeyboard?: boolean;
+  confidence: number;
+}
+
 export interface MacroActionStep {
   thought: string;
   action: "tap" | "type" | "swipe" | "key" | "wait" | "done" | "fail";
@@ -75,6 +100,15 @@ export abstract class BaseInferenceProvider {
     actionHistory: string[],
     imageBase64: string
   ): Promise<MacroActionStep>;
+
+  /**
+   * Performs purely visual or multimodal screen analysis (summary, scroll state, visible elements, modals).
+   */
+  abstract analyzeScreen(
+    imageBase64: string,
+    prompt?: string,
+    focus?: "all" | "scroll_state" | "elements" | "text" | "custom"
+  ): Promise<ScreenAnalysisResult>;
 
   /**
    * Resiliently extracts and parses JSON from model responses, handling raw JSON,

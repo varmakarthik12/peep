@@ -12,7 +12,7 @@ export async function startMcpServer(config: PeepConfig): Promise<void> {
 
   const server = new McpServer({
     name: "peep",
-    version: "0.3.1",
+    version: "0.4.0",
   });
 
   const provider = createProvider(config.provider);

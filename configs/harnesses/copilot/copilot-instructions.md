@@ -11,17 +11,23 @@ When assisting with Android application development, mobile UI testing, device a
 
 ## 2. 🛑 Strict Engineering Rule: NEVER Call Raw ADB Shell Commands
 - Do NOT run raw `adb logcat` (burns 30k-75k tokens per invocation). Use `peep logs --crashes`.
-- Do NOT run raw `adb exec-out screencap` (burns 1,600-2,500 vision tokens). Use `peep tap` or `peep assert`.
+- Do NOT run raw `adb exec-out screencap` (burns 1,600-2,500 vision tokens). Use `peep locate`, `peep analyze`, `peep tap`, or `peep assert`.
 - Do NOT run raw `adb shell input tap` (crash blind: returns exit code 0 even when app crashed). Peep's synchronized watchdog catches crashes immediately.
 - Do NOT run raw `adb shell am start`. Use `peep launch` for automatic launcher activity resolution and startup crash checks.
 
 ---
 
-## 3. CLI Command Patterns for Device Automation (v0.2.0)
+## 3. CLI Command Patterns for Device Automation (v0.4.0)
 
 When generating terminal commands or automation tasks, use:
 
 ```bash
+# Pure Visual Analysis & Location (Zero screen mutation, zero cloud vision tokens)
+peep locate "Checkout Button"
+peep locate "Profile Avatar"
+peep analyze
+peep analyze "Check if cart items have loaded and if the checkout CTA is visible"
+
 # App Lifecycle & State
 peep launch com.example.app/.MainActivity
 peep stop com.example.app
@@ -50,6 +56,12 @@ peep press home
 # Visual Verification (Evaluated by local vision model, zero cloud tokens burned)
 peep assert "Order confirmation banner with ID #1234 is visible"
 peep assert "Error dialog says 'Invalid Credentials'"
+
+# System & Hook Reloads (Advanced / Rooted workflows)
+peep kill 12345 --root
+peep restart com.example.app --root
+peep reload zygote
+peep selinux permissive
 
 # Crash & Log Investigation
 peep logs --crashes

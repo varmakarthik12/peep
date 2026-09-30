@@ -22,7 +22,7 @@ describe("CLI End-to-End Execution", () => {
 
   it("prints version with -V or --version", async () => {
     const { stdout } = await execFileAsync("node", [CLI_PATH, "--version"]);
-    expect(stdout.trim()).toBe("0.3.1");
+    expect(stdout.trim()).toBe("0.4.0");
   });
 
   it("executes benchmark command and renders token savings comparison table", async () => {
@@ -112,6 +112,8 @@ describe("CLI End-to-End Execution", () => {
     expect(stdout).toContain("browse");
     expect(stdout).toContain("dom");
     expect(stdout).toContain("window");
+    expect(stdout).toContain("locate");
+    expect(stdout).toContain("analyze");
   });
 
   it("prints help for browse and window commands", async () => {
@@ -120,5 +122,13 @@ describe("CLI End-to-End Execution", () => {
 
     const { stdout: windowHelp } = await execFileAsync("node", [CLI_PATH, "window", "--help"]);
     expect(windowHelp).toContain("Desktop window management");
+  });
+
+  it("prints help for locate and analyze commands", async () => {
+    const { stdout: locateHelp } = await execFileAsync("node", [CLI_PATH, "locate", "--help"]);
+    expect(locateHelp).toContain("Locate an element visually or semantically without executing a tap");
+
+    const { stdout: analyzeHelp } = await execFileAsync("node", [CLI_PATH, "analyze", "--help"]);
+    expect(analyzeHelp).toContain("Visually analyze active screen layout, scroll state, and visible landmarks");
   });
 });

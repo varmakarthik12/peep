@@ -4,6 +4,8 @@ import {
   AssertionResult,
   LogSummaryResult,
   MacroActionStep,
+  ScreenAnalysisResult,
+  KeyElementInfo,
 } from "./base.js";
 import { InferenceProviderConfig } from "../config/schema.js";
 import { logger } from "../utils/logger.js";
@@ -307,5 +309,102 @@ Output next action JSON:
     } catch (err) {
       return { thought: "Ollama action parsing failed", action: "fail" };
     }
+  }
+
+  async analyzeScreen(
+    imageBase64: string,
+    userPrompt?: string,
+    focus: "all" | "scroll_state" | "elements" | "text" | "custom" = "all"
+  ): Promise<ScreenAnalysisResult> {
+    const prompt = `Analyze this screen image thoroughly without executing actions.
+Focus area: "${focus}".
+${userPrompt ? `Specific question/objective: "${userPrompt}"` : ""}
+
+Output strict JSON:
+{
+  "screenSummary": "Concise 1-2 sentence description of current screen",
+  "scrollState": {
+    "isScrollable": true,
+    "position": "top", // "top" | "middle" | "bottom" | "unknown"
+    "canScrollUp": false,
+    "canScrollDown": true,
+    "scrollbarVisible": false
+  },
+  "visibleKeyElements": [
+    {
+      "label": "Element name or visible text",
+      "type": "button", // "button" | "input" | "text" | "icon" | "list_item" | "header"
+      "location": "header", // "header" | "footer" | "content" | "navigation" | "overlay" | "unknown"
+      "point": [500, 200]
+    }
+  ],
+  "hasActiveOverlay": false,
+  "hasKeyboard": false,
+  "confidence": 0.95
+}`;
+
+    try {
+      const content = await this.callOllamaChat(this.visionModel, [
+        {
+          role: "user",
+          content: prompt,
+          images: [imageBase64],
+        },
+      ]);
+
+      const parsed = this.cleanAndParseJson(content) as Record<string, unknown> | null;
+      if (parsed) {
+        const scrollRaw = (parsed.scrollState as Record<string, unknown>) || {};
+        const scrollPos = ["top", "middle", "bottom", "unknown"].includes(String(scrollRaw.position))
+          ? (String(scrollRaw.position) as "top" | "middle" | "bottom" | "unknown")
+          : "unknown";
+
+        const keyElements: KeyElementInfo[] = Array.isArray(parsed.visibleKeyElements)
+          ? (parsed.visibleKeyElements as Array<Record<string, unknown>>)
+              .map((el) => ({
+                label: String(el.label || ""),
+                type: el.type ? String(el.type) : undefined,
+                location: ["header", "footer", "content", "navigation", "overlay", "unknown"].includes(
+                  String(el.location)
+                )
+                  ? (String(el.location) as any)
+                  : undefined,
+                point: this.parseNormalizedPoint(el.point),
+              }))
+              .filter((el) => Boolean(el.label))
+          : [];
+
+        return {
+          screenSummary: String(parsed.screenSummary || "Screen analysis completed"),
+          scrollState: {
+            isScrollable: Boolean(scrollRaw.isScrollable),
+            position: scrollPos,
+            canScrollUp: Boolean(scrollRaw.canScrollUp),
+            canScrollDown: Boolean(scrollRaw.canScrollDown),
+            scrollbarVisible:
+              typeof scrollRaw.scrollbarVisible === "boolean" ? scrollRaw.scrollbarVisible : undefined,
+          },
+          visibleKeyElements: keyElements,
+          hasActiveOverlay: Boolean(parsed.hasActiveOverlay),
+          hasKeyboard: typeof parsed.hasKeyboard === "boolean" ? parsed.hasKeyboard : undefined,
+          confidence: typeof parsed.confidence === "number" ? parsed.confidence : 0.8,
+        };
+      }
+    } catch (err) {
+      logger.warn("Ollama screen analysis error:", err);
+    }
+
+    return {
+      screenSummary: "Screen analysis failed or unparseable",
+      scrollState: {
+        isScrollable: false,
+        position: "unknown",
+        canScrollUp: false,
+        canScrollDown: false,
+      },
+      visibleKeyElements: [],
+      hasActiveOverlay: false,
+      confidence: 0,
+    };
   }
 }

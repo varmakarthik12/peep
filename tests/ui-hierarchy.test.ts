@@ -44,6 +44,7 @@ describe("UiHierarchyParser", () => {
         className: "android.widget.TextView",
         bounds: { left: 100, top: 200, right: 400, bottom: 280 },
         clickable: false,
+        scrollable: false,
       });
 
       expect(elements[1]).toEqual({
@@ -53,6 +54,7 @@ describe("UiHierarchyParser", () => {
         className: "android.widget.EditText",
         bounds: { left: 100, top: 320, right: 980, bottom: 440 },
         clickable: true,
+        scrollable: false,
       });
 
       expect(elements[2]).toEqual({
@@ -62,6 +64,7 @@ describe("UiHierarchyParser", () => {
         className: "android.widget.ImageButton",
         bounds: { left: 30, top: 120, right: 150, bottom: 240 },
         clickable: true,
+        scrollable: false,
       });
 
       expect(elements[3].clickable).toBe(true);

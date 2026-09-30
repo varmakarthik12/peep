@@ -39,6 +39,8 @@ When the user invokes `/peep`, they want you to interact with or validate a peri
 - `/peep clear <app>`: Reset app data and cache to factory state.
 - `/peep state`: Inspect current foreground package/activity, screen resolution, orientation, and battery status.
 - `/peep wake`: Wake screen and dismiss keyguard.
+- `/peep locate "<target>"`: Locate element (via Tier 0 accessibility tree or local vision) and return coordinates/bounds without tapping.
+- `/peep analyze [prompt]`: Visually analyze screen layout, scroll state (top/middle/bottom), and visible landmarks without mutating screen state.
 - `/peep tap "<target>"`: Locate element (via Tier 0 accessibility tree or local vision) and tap it.
 - `/peep type "<text>" in "<field>"`: Focus field and input sanitized text.
 - `/peep swipe <direction>`: Dispatch directional swipe gesture (`up`, `down`, `left`, `right`).
@@ -61,7 +63,7 @@ When the user invokes `/peep`, they want you to interact with or validate a peri
 
 ---
 
-## Complete Peep MCP Tools Reference (31 Tools)
+## Complete Peep MCP Tools Reference (33 Tools)
 
 ### 1. App Lifecycle & System State
 - **`peep_launch_app(app, stopExisting?, resetState?, waitForLaunch?, extras?)`**:
@@ -90,6 +92,10 @@ When the user invokes `/peep`, they want you to interact with or validate a peri
   Reliably `set`, `get`, or `paste` clipboard contents without shell escaping issues.
 
 ### 2. Screen Perception & Interaction
+- **`peep_locate_element(target, strategy?, context?, platform?)`**:
+  Locates visual or semantic element on screen without executing a tap. Returns element bounds, click point, and visibility confidence while shielding raw screenshots from cloud context.
+- **`peep_analyze_screen(prompt?, focus?, useLocalVision?, platform?)`**:
+  Performs non-destructive visual and structural inspection of the current screen. Analyzes screen summary, scroll state (isScrollable, position: top/middle/bottom, canScrollUp/canScrollDown), key visible interactive landmarks, and active overlays/modals using local VLM or accessibility fallback without cloud vision token burn.
 - **`peep_find_and_tap(target, strategy?, context?, platform?)`**:
   Locates element (Tier 0 accessibility tree or Tier 2 local VLM) and executes physical tap. Shields 1,600+ vision tokens.
 - **`peep_type_text(text, target?, clearFirst?, platform?)`**:

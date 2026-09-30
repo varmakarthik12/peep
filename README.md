@@ -112,6 +112,11 @@ peep restart com.example.app               # Clean stop & restart
 peep install ./build/app-release.apk       # Install APK with auto-permissions (-g)
 peep state                                 # Inspect foreground activity & battery
 
+# 👁️ Pure Visual Analysis & Location (Zero Screen Mutation)
+peep locate "Checkout Button"               # Locate element bounds & click coords without tapping
+peep analyze                                # Inspect screen layout, scroll state (top/mid/bot) & landmarks
+peep analyze "Verify cart items loaded"     # Visual evaluation with natural language focus prompt
+
 # 👆 Touch, Gestures & Clipboard
 peep tap "Sign In"                         # Tap element by label, ID, or local vision
 peep type "dev@example.com" --target "Email" # Focus field and type text

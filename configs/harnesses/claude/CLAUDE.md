@@ -36,6 +36,8 @@ When working in repositories involving Android development, mobile testing, or d
 - **List installed apps**: `peep apps` or `peep_list_apps(filter="third_party")`
 
 ### 2. Screen Perception & Interaction
+- **Locate without tapping**: `peep locate "<target>"` or `peep_locate_element(target="Save", strategy="auto")`
+- **Visual screen analysis & scroll state**: `peep analyze [prompt]` or `peep_analyze_screen(prompt="...", focus="all|scroll_state")`
 - **Tap an element**: `peep tap "<target>"` or `peep_find_and_tap(target="Sign In", strategy="auto")`
 - **Type into fields**: `peep type "<text>" --target "<field>"` or `peep_type_text(target="Email", text="user@example.com")`
 - **Swipe / Scroll**: `peep swipe <up|down|left|right>` or `peep_swipe(direction="up", distance="medium")`

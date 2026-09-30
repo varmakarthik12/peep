@@ -13,6 +13,7 @@ export interface SemanticElement {
     bottom: number;
   };
   clickable?: boolean;
+  scrollable?: boolean;
 }
 
 export interface ScreenFrame {

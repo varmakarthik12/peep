@@ -28,6 +28,8 @@ You have access to the Peep MCP server (`peep_*` tools). Peep shields your conte
 - `peep_manage_files`: Push/pull files with media scanner broadcast.
 
 ### Screen Interaction & Perception:
+- `peep_locate_element`: Locate element by semantics or local vision and return bounds/coords without tapping.
+- `peep_analyze_screen`: Visually analyze screen layout, scroll state (top/middle/bottom), and visible landmarks.
 - `peep_find_and_tap`: Locate element by semantics or local vision and tap.
 - `peep_type_text`: Focus and type text into input fields.
 - `peep_swipe`: Scroll smoothly ('up', 'down', 'left', 'right').

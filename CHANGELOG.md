@@ -6,6 +6,26 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ---
 
+## [0.4.0] - 2026-09-30
+
+### 👁️ Pure Visual Analysis Suite & Scroll State Perception (33 MCP Tools Total)
+
+Version 0.4.0 introduces decoupled pure visual analysis and non-mutating UI perception tools to Peep, expanding the MCP tool registry to **33 tools**. Frontier models and AI coding harnesses can now observe UI layout, find UI element coordinates, and inspect scroll position (`top`, `middle`, `bottom`) with zero UI mutation and zero cloud vision token burn.
+
+---
+
+### ✨ Added — Pure Visual Analysis & Location Tools
+
+- **`peep_locate_element`**: Non-mutating UI element locator leveraging Tier 0 accessibility hierarchy or Tier 2 local vision. Returns element existence, physical bounding boxes, center click coordinates, and confidence scores without tapping or altering screen state.
+- **`peep_analyze_screen`**: Non-destructive screen layout and scroll state inspection. Uses local VLM or accessibility tree fallback to deliver high-level screen summaries, scroll position (`top`, `middle`, `bottom`), vertical scrollability indicators (`isScrollable`, `canScrollUp`, `canScrollDown`, `scrollbarVisible`), active modal/dialog overlays, and major UI landmarks.
+- **`peep locate <target>` CLI Command**: Direct terminal locator returning element coordinates and bounds.
+- **`peep analyze [prompt]` CLI Command**: Direct terminal screen and scroll posture inspector with optional natural language focus prompt.
+- **Enhanced Android UI Hierarchy Perception**: Extracted `@_scrollable` attributes from `uiautomator dump` XML trees into `SemanticElement.scrollable`, enabling instant Tier 0 scrollability detection in ~15ms with zero model inference.
+- **Provider Scroll & Landmark Extraction**: Implemented structured screen analysis parsing in `OpenAICompatibleProvider` and `OllamaProvider`.
+- **Harness Synchronization**: Updated skill instructions and rules across Antigravity 2.0, Cursor, Claude Code, Windsurf Cascade, Cline / Roo Code, and GitHub Copilot.
+
+---
+
 ## [0.3.1] - 2026-09-30
 
 ### 📖 Streamlined Developer-First Documentation

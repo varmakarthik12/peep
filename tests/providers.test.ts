@@ -258,6 +258,49 @@ describe("Inference Providers", () => {
       expect(res.explanation).toContain("Order Confirmation dialog");
     });
 
+    it("analyzeScreen analyzes visual layout, scroll state, and key elements", async () => {
+      global.fetch = vi.fn().mockResolvedValue({
+        ok: true,
+        json: async () => ({
+          choices: [
+            {
+              message: {
+                content: JSON.stringify({
+                  screenSummary: "Settings overview with network and battery options",
+                  scrollState: {
+                    isScrollable: true,
+                    position: "top",
+                    canScrollUp: false,
+                    canScrollDown: true,
+                    scrollbarVisible: true,
+                  },
+                  visibleKeyElements: [
+                    { label: "Network & internet", type: "list_item", point: [500, 200] },
+                    { label: "Battery", type: "list_item", point: [500, 400] },
+                  ],
+                  hasActiveOverlay: false,
+                  hasKeyboard: false,
+                  confidence: 0.95,
+                }),
+              },
+            },
+          ],
+        }),
+      } as Response);
+
+      const provider = new OpenAICompatibleProvider(config);
+      const res = await provider.analyzeScreen("base64image", "Check network setting", "all");
+
+      expect(res.screenSummary).toContain("Settings overview");
+      expect(res.scrollState.isScrollable).toBe(true);
+      expect(res.scrollState.position).toBe("top");
+      expect(res.scrollState.canScrollDown).toBe(true);
+      expect(res.visibleKeyElements).toHaveLength(2);
+      expect(res.visibleKeyElements[0].label).toBe("Network & internet");
+      expect(res.hasActiveOverlay).toBe(false);
+      expect(res.confidence).toBe(0.95);
+    });
+
     it("summarizeLogAnomalies returns clean fallback when logs array is empty", async () => {
       const provider = new OpenAICompatibleProvider(config);
       const res = await provider.summarizeLogAnomalies([]);
@@ -384,6 +427,38 @@ describe("Inference Providers", () => {
 
       expect(res.hasFatalError).toBe(false);
       expect(res.summary).toBe("Empty log buffer.");
+    });
+
+    it("analyzeScreen processes visual screen analysis via Ollama chat API", async () => {
+      global.fetch = vi.fn().mockResolvedValue({
+        ok: true,
+        json: async () => ({
+          message: {
+            content: JSON.stringify({
+              screenSummary: "Home feed with product list",
+              scrollState: {
+                isScrollable: true,
+                position: "middle",
+                canScrollUp: true,
+                canScrollDown: true,
+              },
+              visibleKeyElements: [
+                { label: "Checkout Button", type: "button", point: [500, 900] },
+              ],
+              hasActiveOverlay: true,
+              confidence: 0.92,
+            }),
+          },
+        }),
+      } as Response);
+
+      const provider = new OllamaProvider(ollamaConfig);
+      const res = await provider.analyzeScreen("base64image", "Is checkout visible?", "elements");
+
+      expect(res.screenSummary).toBe("Home feed with product list");
+      expect(res.scrollState.position).toBe("middle");
+      expect(res.hasActiveOverlay).toBe(true);
+      expect(res.visibleKeyElements).toHaveLength(1);
     });
   });
 });

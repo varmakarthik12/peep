@@ -178,6 +178,234 @@ export function registerTools(
     }
   );
 
+  // 1b. peep_locate_element
+  server.tool(
+    "peep_locate_element",
+    "Locates a visual or semantic element on screen without executing any tap or action (via Tier 0 accessibility tree or Tier 2 local vision model). Returns element presence, bounding box, click point, and visibility confidence while shielding raw screenshots from cloud context.",
+    {
+      target: z.string().describe("Semantic description, label, or text of the element to locate"),
+      strategy: z
+        .enum(["auto", "tree_first", "vision_only", "tree_only"])
+        .default("auto")
+        .describe("Perception strategy: 'auto' tries UI tree first then falls back to local vision model"),
+      context: z.string().optional().describe("Optional contextual hint"),
+      platform: z.enum(["android", "browser", "desktop", "ios"]).optional().describe("Target platform"),
+    },
+    async ({ target: targetDesc, strategy, context, platform }) => {
+      logger.info(`[MCP:locate] Target: "${targetDesc}", Strategy: ${strategy}, Platform: ${platform || "default"}`);
+      const { target, errorResponse } = validateTarget(platform as TargetPlatform);
+      if (errorResponse) return errorResponse;
+
+      // Tier 0/1: Try semantic tree if strategy allows
+      if (strategy === "auto" || strategy === "tree_first" || strategy === "tree_only") {
+        const el = await target.findSemanticElement(targetDesc);
+        if (el) {
+          const centerX = Math.round((el.bounds.left + el.bounds.right) / 2);
+          const centerY = Math.round((el.bounds.top + el.bounds.bottom) / 2);
+
+          const saved = tokenShield.recordShieldedScreenshot(45);
+          return {
+            content: [
+              {
+                type: "text",
+                text: JSON.stringify(
+                  {
+                    status: "SUCCESS",
+                    found: true,
+                    method: "tier0_semantic_tree",
+                    point: [centerX, centerY],
+                    box: el.bounds,
+                    element: {
+                      text: el.text,
+                      id: el.id,
+                      contentDescription: el.contentDescription,
+                      clickable: el.clickable,
+                      scrollable: el.scrollable,
+                    },
+                    cloudTokensSaved: saved,
+                  },
+                  null,
+                  2
+                ),
+              },
+            ],
+          };
+        }
+
+        if (strategy === "tree_only") {
+          return {
+            content: [
+              {
+                type: "text",
+                text: JSON.stringify(
+                  {
+                    status: "NOT_FOUND",
+                    found: false,
+                    method: "tier0_semantic_tree",
+                    message: `Element '${targetDesc}' not found in accessibility tree.`,
+                  },
+                  null,
+                  2
+                ),
+              },
+            ],
+          };
+        }
+      }
+
+      // Tier 2: Local VLM visual grounding (without tapping)
+      const frame = await target.captureScreenshot();
+      const grounding = await provider.groundElement(
+        context ? `${targetDesc} (${context})` : targetDesc,
+        frame.base64
+      );
+
+      if (!grounding.found || !grounding.point) {
+        return {
+          content: [
+            {
+              type: "text",
+              text: JSON.stringify(
+                {
+                  status: "NOT_FOUND",
+                  found: false,
+                  method: "tier2_local_vlm",
+                  message: `Local vision model could not ground '${targetDesc}'.`,
+                  thought: grounding.thought,
+                },
+                null,
+                2
+              ),
+            },
+          ],
+        };
+      }
+
+      const phys = mapper.toPhysicalPoint(grounding.point, {
+        frameWidth: frame.width,
+        frameHeight: frame.height,
+        jitter: false,
+      });
+
+      const saved = tokenShield.recordShieldedScreenshot(50);
+      return {
+        content: [
+          {
+            type: "text",
+            text: JSON.stringify(
+              {
+                status: "SUCCESS",
+                found: true,
+                method: "tier2_local_vlm",
+                point: [phys.x, phys.y],
+                normalizedPoint: [grounding.point.x, grounding.point.y],
+                confidence: grounding.confidence,
+                thought: grounding.thought,
+                cloudTokensSaved: saved,
+              },
+              null,
+              2
+            ),
+          },
+        ],
+      };
+    }
+  );
+
+  // 1c. peep_analyze_screen
+  server.tool(
+    "peep_analyze_screen",
+    "Performs non-destructive visual and structural inspection of the current screen. Analyzes screen summary, scroll state (isScrollable, position: top/middle/bottom, canScrollUp/canScrollDown), key visible interactive landmarks, and active overlays/modals using local VLM or accessibility fallback without cloud vision token burn.",
+    {
+      prompt: z.string().optional().describe("Optional question or focus query (e.g. 'Is the checkout total visible?', 'Are we at the bottom of the page?')"),
+      focus: z
+        .enum(["all", "scroll_state", "elements", "text", "custom"])
+        .default("all")
+        .describe("Focus area for screen inspection"),
+      useLocalVision: z.boolean().default(true).describe("Whether to query local vision model (falls back to semantic tree if false)"),
+      platform: z.enum(["android", "browser", "desktop", "ios"]).optional().describe("Target platform"),
+    },
+    async ({ prompt: userPrompt, focus, useLocalVision, platform }) => {
+      logger.info(`[MCP:analyze_screen] Focus: ${focus}, Prompt: "${userPrompt || "*"}", Vision: ${useLocalVision}`);
+      const { target, errorResponse } = validateTarget(platform as TargetPlatform);
+      if (errorResponse) return errorResponse;
+
+      if (useLocalVision) {
+        try {
+          const frame = await target.captureScreenshot();
+          const analysis = await provider.analyzeScreen(frame.base64, userPrompt, focus);
+          const saved = tokenShield.recordShieldedScreenshot(75);
+
+          return {
+            content: [
+              {
+                type: "text",
+                text: JSON.stringify(
+                  {
+                    status: "SUCCESS",
+                    method: "local_vlm",
+                    screenSummary: analysis.screenSummary,
+                    scrollState: analysis.scrollState,
+                    visibleKeyElements: analysis.visibleKeyElements,
+                    hasActiveOverlay: analysis.hasActiveOverlay,
+                    hasKeyboard: analysis.hasKeyboard,
+                    confidence: analysis.confidence,
+                    cloudTokensSaved: saved,
+                  },
+                  null,
+                  2
+                ),
+              },
+            ],
+          };
+        } catch (err) {
+          logger.warn(`Local VLM analyzeScreen failed, falling back to tree: ${err instanceof Error ? err.message : String(err)}`);
+        }
+      }
+
+      // Tier 0 fallback or when useLocalVision is false: synthesize from semantic tree
+      const elements = await target.getSemanticHierarchy();
+      const scrollableElements = elements.filter((e) => e.scrollable);
+      const isScrollable = scrollableElements.length > 0;
+
+      const keyElements = elements
+        .filter((e) => Boolean(e.text || e.contentDescription || e.id))
+        .slice(0, 15)
+        .map((e) => ({
+          label: e.text || e.contentDescription || e.id || "unnamed",
+          type: e.clickable ? "button" : "text",
+          point: [Math.round((e.bounds.left + e.bounds.right) / 2), Math.round((e.bounds.top + e.bounds.bottom) / 2)],
+        }));
+
+      const saved = tokenShield.recordShieldedScreenshot(50);
+      return {
+        content: [
+          {
+            type: "text",
+            text: JSON.stringify(
+              {
+                status: "SUCCESS",
+                method: "tier0_semantic_tree",
+                screenSummary: `Screen contains ${elements.length} hierarchy nodes and ${keyElements.length} identifiable landmarks.`,
+                scrollState: {
+                  isScrollable,
+                  position: isScrollable ? "unknown" : "top",
+                  canScrollUp: isScrollable,
+                  canScrollDown: isScrollable,
+                },
+                visibleKeyElements: keyElements,
+                hasActiveOverlay: false,
+                cloudTokensSaved: saved,
+              },
+              null,
+              2
+            ),
+          },
+        ],
+      };
+    }
+  );
+
   // 2. peep_type_text
   server.tool(
     "peep_type_text",

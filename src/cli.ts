@@ -17,7 +17,7 @@ const program = new Command();
 program
   .name("peep")
   .description("Peripheral Evaluation & Execution Proxy: The Open-Source Token Shield for Autonomous Agents")
-  .version("0.3.1")
+  .version("0.4.0")
   .option("-c, --config <path>", "Path to peep.yaml config file")
   .option("--log-level <level>", "Log level: debug, info, warn, error, silent", "info")
   .option("-d, --device <id>", "Explicit Android device/emulator serial ID (e.g. emulator-5554, 127.0.0.1:7555)")
@@ -350,6 +350,83 @@ program
     }
   });
 
+// 3b. peep locate
+program
+  .command("locate <target>")
+  .description("Locate an element visually or semantically without executing a tap")
+  .option("-s, --strategy <strategy>", "Perception strategy: auto, tree_first, vision_only, tree_only", "auto")
+  .option("-c, --context <context>", "Contextual hint (e.g. 'top right')")
+  .option("-p, --platform <platform>", "Target platform: android, browser, desktop, ios")
+  .option("--json", "Output result as JSON")
+  .action(async (targetDesc: string, cmdOpts) => {
+    const { config, targetManager, provider } = getTargetManagerAndConfig();
+    const target = await resolveAndInitTarget(targetManager, cmdOpts.platform as TargetPlatform, cmdOpts.json);
+
+    const metrics = await target.getDisplayMetrics();
+    const mapper = new CoordinateMapper(metrics, config.perception.coordinateScale);
+    let point: [number, number] | undefined;
+    let box: unknown;
+    let method: string | undefined;
+    let found = false;
+
+    // Try Tier 0 semantic tree
+    if (cmdOpts.strategy === "auto" || cmdOpts.strategy === "tree_first" || cmdOpts.strategy === "tree_only") {
+      const el = await target.findSemanticElement(targetDesc);
+      if (el) {
+        found = true;
+        point = [Math.round((el.bounds.left + el.bounds.right) / 2), Math.round((el.bounds.top + el.bounds.bottom) / 2)];
+        box = el.bounds;
+        method = "tier0_semantic_tree";
+      }
+    }
+
+    // Try Tier 2 local vision model
+    if (!found && cmdOpts.strategy !== "tree_only") {
+      const frame = await target.captureScreenshot();
+      const grounding = await provider.groundElement(
+        cmdOpts.context ? `${targetDesc} (${cmdOpts.context})` : targetDesc,
+        frame.base64
+      );
+      if (grounding.found && grounding.point) {
+        found = true;
+        const phys = mapper.toPhysicalPoint(grounding.point, {
+          frameWidth: frame.width,
+          frameHeight: frame.height,
+          jitter: false,
+        });
+        point = [phys.x, phys.y];
+        method = "tier2_local_vlm";
+      }
+    }
+
+    await targetManager.closeAll();
+
+    if (cmdOpts.json) {
+      console.log(
+        JSON.stringify(
+          {
+            status: found ? "SUCCESS" : "NOT_FOUND",
+            found,
+            target: targetDesc,
+            method: method || "none",
+            point,
+            box,
+            tokensSaved: found ? 1600 : 0,
+          },
+          null,
+          2
+        )
+      );
+    } else {
+      if (found && point) {
+        console.log(pc.green(`✓ [FOUND] Located '${targetDesc}' at (${point[0]}, ${point[1]}) via ${method} [Shielded 1,600 tokens]`));
+      } else {
+        console.error(pc.red(`✗ [NOT_FOUND] Could not locate target: '${targetDesc}'`));
+        process.exit(1);
+      }
+    }
+  });
+
 // 4. peep type
 program
   .command("type <text>")
@@ -482,6 +559,94 @@ program
         if (res.explanation) console.error(pc.dim(`  Reason: ${res.explanation}`));
         process.exit(1);
       }
+    }
+  });
+
+// 7b. peep analyze
+program
+  .command("analyze [prompt]")
+  .description("Visually analyze active screen layout, scroll state, and visible landmarks without action")
+  .option("-f, --focus <focus>", "Focus area: all, scroll_state, elements, text, custom", "all")
+  .option("-p, --platform <platform>", "Target platform: android, browser, desktop, ios")
+  .option("--no-vision", "Bypass local vision model and synthesize from accessibility hierarchy only")
+  .option("--json", "Output result as JSON")
+  .action(async (promptText: string | undefined, cmdOpts) => {
+    const { targetManager, provider } = getTargetManagerAndConfig();
+    const target = await resolveAndInitTarget(targetManager, cmdOpts.platform as TargetPlatform, cmdOpts.json);
+
+    let analysis;
+    let method = "local_vlm";
+
+    if (cmdOpts.vision !== false) {
+      try {
+        const frame = await target.captureScreenshot();
+        analysis = await provider.analyzeScreen(frame.base64, promptText, cmdOpts.focus);
+      } catch (err) {
+        logger.warn(`Local VLM failed, falling back to hierarchy: ${err instanceof Error ? err.message : String(err)}`);
+      }
+    }
+
+    if (!analysis) {
+      method = "tier0_semantic_tree";
+      const elements = await target.getSemanticHierarchy();
+      const scrollableElements = elements.filter((e) => e.scrollable);
+      const isScrollable = scrollableElements.length > 0;
+      const keyElements = elements
+        .filter((e) => Boolean(e.text || e.contentDescription || e.id))
+        .slice(0, 15)
+        .map((e) => ({
+          label: e.text || e.contentDescription || e.id || "unnamed",
+          type: e.clickable ? "button" : "text",
+        }));
+
+      analysis = {
+        screenSummary: `Screen contains ${elements.length} hierarchy nodes and ${keyElements.length} key elements.`,
+        scrollState: {
+          isScrollable,
+          position: isScrollable ? ("unknown" as const) : ("top" as const),
+          canScrollUp: isScrollable,
+          canScrollDown: isScrollable,
+        },
+        visibleKeyElements: keyElements,
+        hasActiveOverlay: false,
+        confidence: 0.8,
+      };
+    }
+
+    await targetManager.closeAll();
+
+    if (cmdOpts.json) {
+      console.log(
+        JSON.stringify(
+          {
+            status: "SUCCESS",
+            method,
+            prompt: promptText || "general inspection",
+            focus: cmdOpts.focus,
+            ...analysis,
+            tokensSaved: 1850,
+          },
+          null,
+          2
+        )
+      );
+    } else {
+      console.log(pc.bold(pc.cyan("\n📱 Screen Visual Analysis:\n")));
+      console.log(pc.green(`Summary: `) + analysis.screenSummary);
+      console.log(
+        pc.yellow(`Scroll State: `) +
+          `Position: ${analysis.scrollState.position} | Scrollable: ${analysis.scrollState.isScrollable} (Up: ${analysis.scrollState.canScrollUp}, Down: ${analysis.scrollState.canScrollDown})`
+      );
+      if (analysis.hasActiveOverlay) {
+        console.log(pc.magenta(`⚠️ Active Overlay/Modal Detected`));
+      }
+      if (analysis.visibleKeyElements.length > 0) {
+        console.log(pc.cyan(`\nKey Landmarks:`));
+        for (const el of analysis.visibleKeyElements.slice(0, 8)) {
+          console.log(`  • [${el.type || "element"}] ${el.label}`);
+        }
+      }
+      console.log(pc.dim(`\n[Shielded 1,850 cloud vision tokens via ${method}]\n`));
     }
   });
 
