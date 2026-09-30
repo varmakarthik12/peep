@@ -6,6 +6,17 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ---
 
+## [0.3.1] - 2026-09-30
+
+### 📖 Streamlined Developer-First Documentation
+
+Version 0.3.1 completely rewrites and streamlines the primary project documentation to eliminate unnecessary bloat:
+- **Human-Written README**: Reduced `README.md` from 700 lines down to ~165 lines of sharp, punchy, developer-first documentation.
+- **Dedicated Deep-Dive Guides**: Relocated verbose multi-device port mappings, extensive CLI flag catalogs, and detailed per-harness JSON configurations to dedicated guides in `docs/` (`docs/HARNESS_INTEGRATIONS.md`, `docs/ANDROID_DEVICE_GUIDE.md`).
+- **30-Second Turnkey Quickstart**: Minimal universal MCP setup snippet and quickstart CLI cheat sheet.
+
+---
+
 ## [0.3.0] - 2026-09-30
 
 ### ⚡ Root & LSPosed Developer Suite & Multi-OS CI Hardening

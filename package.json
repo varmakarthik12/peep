@@ -1,6 +1,6 @@
 {
   "name": "peep-mcp",
-  "version": "0.3.0",
+  "version": "0.3.1",
   "description": "Peripheral Evaluation & Execution Proxy: The open-source token shield for AI coding harnesses that offloads mobile visual perception, coordinate grounding, micro-loops, and noisy log analysis to local models.",
   "type": "module",
   "bin": {
