@@ -43,7 +43,7 @@ describe("Configuration & Schema Validation", () => {
 
       expect(config.target.type).toBe("android");
       expect(config.target.defaultPlatform).toBe("android");
-      expect(config.target.enabled).toEqual(["android", "browser", "desktop"]);
+      expect(config.target.enabled).toEqual(["android", "browser", "desktop", "ios"]);
 
       expect(config.perception.strategy).toBe("auto");
       expect(config.perception.confidenceThreshold).toBe(0.7);
@@ -62,7 +62,12 @@ describe("Configuration & Schema Validation", () => {
     });
 
     it("rejects invalid target type", () => {
-      expect(() => TargetConfigSchema.parse({ type: "ios" })).toThrow();
+      expect(() => TargetConfigSchema.parse({ type: "blackberry" })).toThrow();
+    });
+
+    it("accepts ios target type", () => {
+      const parsed = TargetConfigSchema.parse({ type: "ios" });
+      expect(parsed.type).toBe("ios");
     });
 
     it("rejects confidenceThreshold outside 0 to 1 range", () => {

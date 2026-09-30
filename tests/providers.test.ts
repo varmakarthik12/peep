@@ -257,5 +257,133 @@ describe("Inference Providers", () => {
       expect(res.confidence).toBe(0.99);
       expect(res.explanation).toContain("Order Confirmation dialog");
     });
+
+    it("summarizeLogAnomalies returns clean fallback when logs array is empty", async () => {
+      const provider = new OpenAICompatibleProvider(config);
+      const res = await provider.summarizeLogAnomalies([]);
+
+      expect(res.hasFatalError).toBe(false);
+      expect(res.summary).toContain("No log events recorded");
+    });
+
+    it("summarizeLogAnomalies parses structured anomaly diagnosis from model", async () => {
+      global.fetch = vi.fn().mockResolvedValue({
+        ok: true,
+        json: async () => ({
+          choices: [
+            {
+              message: {
+                content: JSON.stringify({
+                  hasFatalError: true,
+                  summary: "App crashed with NullPointerException in AuthRepository",
+                  culprit: "AuthRepository.kt:42",
+                  stackSnippet: "at com.example.app.AuthRepository.login(AuthRepository.kt:42)",
+                }),
+              },
+            },
+          ],
+        }),
+      } as Response);
+
+      const provider = new OpenAICompatibleProvider(config);
+      const res = await provider.summarizeLogAnomalies([
+        "E/AndroidRuntime: FATAL EXCEPTION: main",
+        "E/AndroidRuntime: java.lang.NullPointerException: Null session token",
+        "E/AndroidRuntime: \tat com.example.app.AuthRepository.login(AuthRepository.kt:42)",
+      ]);
+
+      expect(res.hasFatalError).toBe(true);
+      expect(res.summary).toContain("NullPointerException in AuthRepository");
+      expect(res.culprit).toBe("AuthRepository.kt:42");
+    });
+
+    it("decideNextAction recommends next micro-loop action step", async () => {
+      global.fetch = vi.fn().mockResolvedValue({
+        ok: true,
+        json: async () => ({
+          choices: [
+            {
+              message: {
+                content: JSON.stringify({
+                  thought: "Screen displays Checkout button in bottom-right",
+                  action: "tap",
+                  point: [750, 920],
+                }),
+              },
+            },
+          ],
+        }),
+      } as Response);
+
+      const provider = new OpenAICompatibleProvider(config);
+      const res = await provider.decideNextAction("Proceed to payment", 0, [], "base64image");
+
+      expect(res.action).toBe("tap");
+      expect(res.thought).toContain("Checkout button");
+      expect(res.point).toEqual({ x: 750, y: 920 });
+    });
+  });
+
+  describe("OllamaProvider Execution", () => {
+    const ollamaConfig = {
+      type: "ollama" as const,
+      baseUrl: "http://localhost:11434",
+      vlmModel: "qwen2.5-vl:7b",
+      slmModel: "gemma:2b",
+      timeoutMs: 5000,
+      temperature: 0.1,
+    };
+
+    it("grounds element via native Ollama chat API", async () => {
+      global.fetch = vi.fn().mockResolvedValue({
+        ok: true,
+        json: async () => ({
+          message: {
+            content: JSON.stringify({
+              found: true,
+              thought: "Target search icon found in header",
+              point: [900, 80],
+              confidence: 0.96,
+            }),
+          },
+        }),
+      } as Response);
+
+      const provider = new OllamaProvider(ollamaConfig);
+      const res = await provider.groundElement("Search", "base64image");
+
+      expect(res.found).toBe(true);
+      expect(res.point).toEqual({ x: 900, y: 80 });
+      expect(res.confidence).toBe(0.96);
+    });
+
+    it("assertCondition evaluates screen state via native Ollama chat API", async () => {
+      global.fetch = vi.fn().mockResolvedValue({
+        ok: true,
+        json: async () => ({
+          message: {
+            content: JSON.stringify({
+              passed: true,
+              confidence: 0.98,
+              explanation: "Profile icon active",
+            }),
+          },
+        }),
+      } as Response);
+
+      const provider = new OllamaProvider(ollamaConfig);
+      const res = await provider.assertCondition("Profile page active", "base64image");
+
+      expect(res.passed).toBe(true);
+      expect(res.confidence).toBe(0.98);
+    });
+
+    it("summarizeLogAnomalies returns clean fallback when logs array is empty", async () => {
+      const provider = new OllamaProvider(ollamaConfig);
+      const res = await provider.summarizeLogAnomalies([]);
+
+      expect(res.hasFatalError).toBe(false);
+      expect(res.summary).toBe("Empty log buffer.");
+    });
   });
 });

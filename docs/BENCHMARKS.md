@@ -30,7 +30,7 @@ Modern frontier models do not read pixels directly; they slice high-resolution i
 2. **Patch Calculus**:
    At typical downsampled tile sizes ($384 \times 384$ or $512 \times 512$ tiles with aspect ratio preservation), a single frame yields **24 to 36 vision patches**.
 3. **Token Weighting**:
-   Across major providers (OpenAI, Anthropic, Google), each image tile costs between **65 and 85 tokens**, plus fixed header overhead (~100–150 tokens):
+   Across major frontier cloud providers, each image tile costs between **65 and 85 tokens**, plus fixed header overhead (~100–150 tokens):
    $$\text{Tokens}_{\text{frame}} \approx (\text{Tiles} \times 75) + 120 \approx 1,600 \text{ to } 2,500 \text{ tokens}$$
 
 If an agent takes 5 actions to verify a login flow, it must ingest 5 consecutive frames. That alone burns **8,000 to 12,500 vision tokens** purely to determine $(X, Y)$ coordinate taps.

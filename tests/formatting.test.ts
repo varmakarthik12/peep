@@ -61,5 +61,31 @@ describe("Formatting Utilities", () => {
       expect(table).toContain("Col2");
       expect(table).toContain("OnlyCol1");
     });
+
+    it("renders empty table gracefully when rows array is empty", () => {
+      const table = renderTable(["Header1", "Header2"], []);
+      expect(table).toContain("Header1");
+      expect(table).toContain("Header2");
+      expect(table).toContain("─");
+    });
+
+    it("renders completely empty table without crashing", () => {
+      const table = renderTable([], []);
+      expect(typeof table).toBe("string");
+    });
+  });
+
+  describe("Numeric edge cases", () => {
+    it("handles negative numbers, zero, and boundary numbers in formatNumber", () => {
+      expect(formatNumber(-42)).toBe("-42");
+      expect(formatNumber(-1234)).toMatch(/-1[,\s.]234/);
+      expect(formatNumber(0)).toBe("0");
+      expect(formatNumber(-0)).toBe("-0");
+    });
+
+    it("handles negative amounts and large amounts in formatCurrency", () => {
+      expect(formatCurrency(-5.25)).toBe("-$5.250");
+      expect(formatCurrency(1000000)).toMatch(/\$1[,\s.]000[,\s.]000\.000/);
+    });
   });
 });

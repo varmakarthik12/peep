@@ -173,5 +173,75 @@ describe("LogcatTailer & Log Filtering Regexes", () => {
       tailer.stop();
       expect(mockProc.kill).toHaveBeenCalled();
     });
+
+    it("suppresses non-fatal levels (V/D/I/W) even if they contain exception class names", () => {
+      const tailer = new LogcatTailer(createMockAdb(), 100, true);
+      const processLine = (tailer as unknown as { processLine: (l: string) => void }).processLine.bind(tailer);
+
+      // Non-fatal debug and info logs with caught exceptions
+      processLine("09-30 11:00:00.000 100 200 D/NetworkHandler: Caught java.lang.NullPointerException gracefully");
+      processLine("09-30 11:00:00.001 100 200 I/AuthService: java.lang.IllegalArgumentException handled in retry loop");
+      processLine("09-30 11:00:00.002 100 200 W/DiskCache: java.lang.RuntimeException recovered");
+
+      expect(tailer.checkWatchdog().hasCrashed).toBe(false);
+
+      // But an Error-level log (E/) with exception MUST trigger crash
+      processLine("09-30 11:00:00.003 100 200 E/AndroidRuntime: java.lang.NullPointerException: Null pointer at line 42");
+      expect(tailer.checkWatchdog().hasCrashed).toBe(true);
+      expect(tailer.checkWatchdog().reason).toContain("NullPointerException");
+    });
+
+    it("triggers watchdog on non-fatal levels if line explicitly contains FATAL or died", () => {
+      const tailer = new LogcatTailer(createMockAdb(), 100, true);
+      const processLine = (tailer as unknown as { processLine: (l: string) => void }).processLine.bind(tailer);
+
+      // D/ level but has FATAL
+      processLine("09-30 11:00:00.000 100 200 D/Worker: FATAL EXCEPTION in thread worker-1");
+      expect(tailer.checkWatchdog().hasCrashed).toBe(true);
+
+      tailer.resetWatchdog();
+      // W/ level but has died
+      processLine("09-30 11:00:00.001 100 200 W/ActivityManager: Process com.example.app has died");
+      expect(tailer.checkWatchdog().hasCrashed).toBe(true);
+    });
+
+    it("handles empty or complex regex filtering gracefully", () => {
+      const tailer = new LogcatTailer(createMockAdb(), 100, true);
+      const processLine = (tailer as unknown as { processLine: (l: string) => void }).processLine.bind(tailer);
+
+      processLine("I/UserAuth: Token refreshed for user 101");
+      processLine("E/UserAuth[Worker]: Connection timeout to auth.server.com:443");
+      processLine("D/Database: Query returned 15 rows");
+
+      // Empty string returns all logs
+      const all = tailer.getRecentLogs("");
+      expect(all).toHaveLength(3);
+
+      // Complex regex with brackets and wildcard
+      const filtered = tailer.getRecentLogs("UserAuth\\[Worker\\].*timeout");
+      expect(filtered).toHaveLength(1);
+      expect(filtered[0]).toContain("auth.server.com:443");
+
+      // Limit 1 returns only the latest line
+      const singleLimit = tailer.getRecentLogs(undefined, 1);
+      expect(singleLimit).toHaveLength(1);
+      expect(singleLimit[0]).toContain("Database");
+    });
+
+    it("handles invalid regex gracefully without throwing syntax error", () => {
+      const tailer = new LogcatTailer(createMockAdb(), 100, true);
+      const processLine = (tailer as unknown as { processLine: (l: string) => void }).processLine.bind(tailer);
+
+      processLine("I/UserAuth: Token refreshed for user 101");
+      processLine("E/UserAuth[Worker]: Connection timeout to auth.server.com:443");
+
+      // Invalid regex like unclosed bracket [Worker or dangling *
+      const res1 = tailer.getRecentLogs("*");
+      expect(res1).toHaveLength(0);
+
+      const res2 = tailer.getRecentLogs("[Worker");
+      expect(res2).toHaveLength(1);
+      expect(res2[0]).toContain("auth.server.com:443");
+    });
   });
 });

@@ -1,7 +1,7 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { registerTools } from "../src/server/tools.js";
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
-import { AndroidTarget } from "../src/targets/android/index.js";
+import { AndroidTarget, BrowserTarget, DesktopTarget } from "../src/targets/index.js";
 import { TargetManager } from "../src/targets/index.js";
 import { BaseInferenceProvider } from "../src/providers/base.js";
 import { CoordinateMapper } from "../src/core/coordinate-mapper.js";
@@ -42,6 +42,39 @@ describe("MCP Server Tools Registration & Handlers", () => {
       findSemanticElement: vi.fn(),
       getRecentLogs: vi.fn().mockResolvedValue(["Line 1", "Line 2"]),
       checkCrashWatchdog: vi.fn().mockResolvedValue({ hasCrashed: false }),
+      launchApp: vi.fn().mockResolvedValue({
+        packageName: "com.example.app",
+        totalTimeMs: 250,
+        waitTimeMs: 180,
+        launchState: "COLD",
+      }),
+      installApp: vi.fn().mockResolvedValue(undefined),
+      uninstallApp: vi.fn().mockResolvedValue(undefined),
+      stopApp: vi.fn().mockResolvedValue(undefined),
+      clearAppData: vi.fn().mockResolvedValue(undefined),
+      wakeAndUnlock: vi.fn().mockResolvedValue({ screenOn: true, keyguardDismissed: true }),
+      setClipboard: vi.fn().mockResolvedValue(undefined),
+      getClipboard: vi.fn().mockResolvedValue("sample clipboard text"),
+      pasteClipboard: vi.fn().mockResolvedValue(undefined),
+      getDeviceState: vi.fn().mockResolvedValue({
+        foreground: { packageName: "com.example.app", activity: ".MainActivity" },
+        display: { width: 1080, height: 2400, rotation: 0 },
+        battery: { level: 95, charging: true },
+      }),
+      openDeepLink: vi.fn().mockResolvedValue({
+        url: "https://example.com/test",
+        resolvedPackage: "com.android.chrome",
+        resolvedActivity: "com.google.android.apps.chrome.Main",
+      }),
+      managePermissions: vi.fn().mockResolvedValue({
+        permissions: ["android.permission.CAMERA", "android.permission.RECORD_AUDIO"],
+      }),
+      setScreenOrientation: vi.fn().mockResolvedValue(undefined),
+      manageFiles: vi.fn().mockResolvedValue({ success: true, message: "File pushed successfully" }),
+      listApps: vi.fn().mockResolvedValue([
+        { packageName: "com.example.app", isSystem: false },
+        { packageName: "com.android.chrome", isSystem: true },
+      ]),
     });
 
     mockProvider = {
@@ -64,15 +97,37 @@ describe("MCP Server Tools Registration & Handlers", () => {
     registerTools(mockServer, mockTarget, mockProvider, mapper);
   });
 
-  it("registers all 8 core Peep MCP tools", () => {
-    expect(tools["peep_find_and_tap"]).toBeDefined();
-    expect(tools["peep_type_text"]).toBeDefined();
-    expect(tools["peep_swipe"]).toBeDefined();
-    expect(tools["peep_press_key"]).toBeDefined();
-    expect(tools["peep_assert_screen_state"]).toBeDefined();
-    expect(tools["peep_tail_and_filter_logs"]).toBeDefined();
-    expect(tools["peep_execute_goal"]).toBeDefined();
-    expect(tools["peep_get_telemetry"]).toBeDefined();
+  it("registers all 23 Peep v0.2.0 MCP tools", () => {
+    const expectedTools = [
+      "peep_find_and_tap",
+      "peep_type_text",
+      "peep_swipe",
+      "peep_press_key",
+      "peep_assert_screen_state",
+      "peep_tail_and_filter_logs",
+      "peep_execute_goal",
+      "peep_get_telemetry",
+      "peep_launch_app",
+      "peep_install_app",
+      "peep_stop_app",
+      "peep_clear_app_data",
+      "peep_wake_and_unlock",
+      "peep_clipboard",
+      "peep_get_device_state",
+      "peep_open_deep_link",
+      "peep_manage_permissions",
+      "peep_set_screen_orientation",
+      "peep_manage_files",
+      "peep_list_apps",
+      "peep_browser_navigate",
+      "peep_browser_get_distilled_dom",
+      "peep_window_management",
+    ];
+
+    expect(Object.keys(tools)).toHaveLength(23);
+    for (const name of expectedTools) {
+      expect(tools[name]).toBeDefined();
+    }
   });
 
   describe("peep_find_and_tap", () => {
@@ -297,7 +352,7 @@ describe("MCP Server Tools Registration & Handlers", () => {
       const data = JSON.parse(res.content[0].text);
       expect(data.status).toBe("UNSUPPORTED_PLATFORM");
       expect(data.platform).toBe("browser");
-      expect(data.message).toContain("Browser target adapter is planned for v0.2");
+      expect(data.message).toContain("Browser target");
       expect(data.activePlatforms).toEqual(["android"]);
     });
 
@@ -310,7 +365,7 @@ describe("MCP Server Tools Registration & Handlers", () => {
       const data = JSON.parse(res.content[0].text);
       expect(data.status).toBe("UNSUPPORTED_PLATFORM");
       expect(data.platform).toBe("desktop");
-      expect(data.message).toContain("Desktop target adapter is planned for v0.2");
+      expect(data.message).toContain("Desktop target adapter");
     });
 
     it("returns UNSUPPORTED_PLATFORM for peep_assert_screen_state on browser without throwing error", async () => {
@@ -322,6 +377,388 @@ describe("MCP Server Tools Registration & Handlers", () => {
       const data = JSON.parse(res.content[0].text);
       expect(data.status).toBe("UNSUPPORTED_PLATFORM");
       expect(data.platform).toBe("browser");
+    });
+  });
+
+  describe("New v0.2.0 Domain Tools", () => {
+    it("peep_launch_app launches application and returns timing and status", async () => {
+      const res = await tools["peep_launch_app"]({
+        app: "com.example.app/.MainActivity",
+        stopExisting: true,
+        resetState: false,
+        waitForLaunch: true,
+      });
+
+      const data = JSON.parse(res.content[0].text);
+      expect(data.status).toBe("SUCCESS");
+      expect(data.app).toBe("com.example.app/.MainActivity");
+      expect(data.totalTimeMs).toBe(250);
+      expect(mockTarget.launchApp).toHaveBeenCalledWith({
+        packageOrComponent: "com.example.app/.MainActivity",
+        stopExisting: true,
+        resetState: false,
+        waitForLaunch: true,
+        extras: undefined,
+      });
+    });
+
+    it("peep_install_app installs APK with runtime permissions", async () => {
+      const res = await tools["peep_install_app"]({
+        path: "C:\\path\\to\\app.apk",
+        grantPermissions: true,
+        reinstall: true,
+        allowDowngrade: false,
+      });
+
+      const data = JSON.parse(res.content[0].text);
+      expect(data.status).toBe("SUCCESS");
+      expect(data.message).toContain("Successfully installed APK");
+      expect(mockTarget.installApp).toHaveBeenCalledWith("C:\\path\\to\\app.apk", {
+        grantPermissions: true,
+        reinstall: true,
+        allowDowngrade: false,
+      });
+    });
+
+    it("peep_stop_app force-stops the target package", async () => {
+      const res = await tools["peep_stop_app"]({ app: "com.example.app" });
+      const data = JSON.parse(res.content[0].text);
+      expect(data.status).toBe("SUCCESS");
+      expect(mockTarget.stopApp).toHaveBeenCalledWith("com.example.app");
+    });
+
+    it("peep_clear_app_data clears app data and cache", async () => {
+      const res = await tools["peep_clear_app_data"]({ app: "com.example.app" });
+      const data = JSON.parse(res.content[0].text);
+      expect(data.status).toBe("SUCCESS");
+      expect(mockTarget.clearAppData).toHaveBeenCalledWith("com.example.app");
+    });
+
+    it("peep_wake_and_unlock wakes screen and dismisses keyguard", async () => {
+      const res = await tools["peep_wake_and_unlock"]({ pin: "1234" });
+      const data = JSON.parse(res.content[0].text);
+      expect(data.status).toBe("SUCCESS");
+      expect(data.screenOn).toBe(true);
+      expect(data.keyguardDismissed).toBe(true);
+      expect(mockTarget.wakeAndUnlock).toHaveBeenCalledWith("1234");
+    });
+
+    it("peep_clipboard supports set, get, and paste", async () => {
+      // Set
+      const setRes = await tools["peep_clipboard"]({ action: "set", text: "secret password" });
+      const setData = JSON.parse(setRes.content[0].text);
+      expect(setData.status).toBe("SUCCESS");
+      expect(setData.action).toBe("set");
+      expect(mockTarget.setClipboard).toHaveBeenCalledWith("secret password");
+
+      // Get
+      const getRes = await tools["peep_clipboard"]({ action: "get" });
+      const getData = JSON.parse(getRes.content[0].text);
+      expect(getData.status).toBe("SUCCESS");
+      expect(getData.text).toBe("sample clipboard text");
+
+      // Paste
+      const pasteRes = await tools["peep_clipboard"]({ action: "paste" });
+      const pasteData = JSON.parse(pasteRes.content[0].text);
+      expect(pasteData.status).toBe("SUCCESS");
+      expect(mockTarget.pasteClipboard).toHaveBeenCalled();
+    });
+
+    it("peep_get_device_state returns foreground, resolution, and battery metrics", async () => {
+      const res = await tools["peep_get_device_state"]({});
+      const data = JSON.parse(res.content[0].text);
+      expect(data.status).toBe("SUCCESS");
+      expect(data.foreground.packageName).toBe("com.example.app");
+      expect(data.battery.level).toBe(95);
+      expect(data.battery.charging).toBe(true);
+    });
+
+    it("peep_open_deep_link dispatches URL to intent handler", async () => {
+      const res = await tools["peep_open_deep_link"]({ url: "https://example.com/test", app: "com.android.chrome" });
+      const data = JSON.parse(res.content[0].text);
+      expect(data.status).toBe("SUCCESS");
+      expect(data.url).toBe("https://example.com/test");
+      expect(mockTarget.openDeepLink).toHaveBeenCalledWith("https://example.com/test", "com.android.chrome");
+    });
+
+    it("peep_manage_permissions grants, revokes, or lists permissions", async () => {
+      const res = await tools["peep_manage_permissions"]({
+        app: "com.example.app",
+        action: "grant",
+        permission: "POST_NOTIFICATIONS",
+      });
+      const data = JSON.parse(res.content[0].text);
+      expect(data.status).toBe("SUCCESS");
+      expect(data.app).toBe("com.example.app");
+      expect(mockTarget.managePermissions).toHaveBeenCalledWith("grant", "com.example.app", "POST_NOTIFICATIONS");
+    });
+
+    it("peep_set_screen_orientation modifies screen rotation", async () => {
+      const res = await tools["peep_set_screen_orientation"]({ orientation: "landscape" });
+      const data = JSON.parse(res.content[0].text);
+      expect(data.status).toBe("SUCCESS");
+      expect(data.orientation).toBe("landscape");
+      expect(mockTarget.setScreenOrientation).toHaveBeenCalledWith("landscape");
+    });
+
+    it("peep_manage_files handles file transfer operations", async () => {
+      const res = await tools["peep_manage_files"]({
+        action: "push",
+        devicePath: "/sdcard/test.txt",
+        hostPath: "C:\\local\\test.txt",
+      });
+      const data = JSON.parse(res.content[0].text);
+      expect(data.status).toBe("SUCCESS");
+      expect(mockTarget.manageFiles).toHaveBeenCalledWith("push", "/sdcard/test.txt", "C:\\local\\test.txt", true);
+    });
+
+    it("peep_list_apps returns list of installed applications", async () => {
+      const res = await tools["peep_list_apps"]({ filter: "third_party", limit: 10 });
+      const data = JSON.parse(res.content[0].text);
+      expect(data.status).toBe("SUCCESS");
+      expect(data.count).toBe(2);
+      expect(mockTarget.listApps).toHaveBeenCalledWith("third_party", undefined, 10);
+    });
+
+    it("peep_browser_navigate routes through android target when chrome is available", async () => {
+      const res = await tools["peep_browser_navigate"]({
+        url: "https://google.com",
+        platform: "android",
+      });
+      const data = JSON.parse(res.content[0].text);
+      expect(data.status).toBe("SUCCESS");
+      expect(data.method).toBe("android_chrome_intent");
+      expect(mockTarget.openDeepLink).toHaveBeenCalledWith("https://google.com", "com.android.chrome");
+    });
+
+    it("peep_manage_permissions supports revoke and list actions", async () => {
+      // Revoke
+      await tools["peep_manage_permissions"]({
+        app: "com.example.app",
+        action: "revoke",
+        permission: "CAMERA",
+      });
+      expect(mockTarget.managePermissions).toHaveBeenCalledWith("revoke", "com.example.app", "CAMERA");
+
+      // List
+      const listRes = await tools["peep_manage_permissions"]({
+        app: "com.example.app",
+        action: "list",
+      });
+      const listData = JSON.parse(listRes.content[0].text);
+      expect(listData.status).toBe("SUCCESS");
+      expect(listData.permissions).toEqual(["android.permission.CAMERA", "android.permission.RECORD_AUDIO"]);
+    });
+
+    it("peep_manage_files supports pull and delete actions", async () => {
+      // Pull
+      await tools["peep_manage_files"]({
+        action: "pull",
+        devicePath: "/sdcard/download.jpg",
+        hostPath: "C:\\tmp\\download.jpg",
+      });
+      expect(mockTarget.manageFiles).toHaveBeenCalledWith("pull", "/sdcard/download.jpg", "C:\\tmp\\download.jpg", true);
+
+      // Delete
+      await tools["peep_manage_files"]({
+        action: "delete",
+        devicePath: "/sdcard/download.jpg",
+      });
+      expect(mockTarget.manageFiles).toHaveBeenCalledWith("delete", "/sdcard/download.jpg", undefined, true);
+    });
+
+    it("peep_find_and_tap with vision_only strategy bypasses semantic tree directly to VLM", async () => {
+      mockProvider.groundElement = vi.fn().mockResolvedValue({
+        found: true,
+        thought: "Located using pure vision",
+        point: { x: 500, y: 500 },
+        confidence: 0.95,
+      });
+
+      const res = await tools["peep_find_and_tap"]({
+        target: "Play Video Button",
+        strategy: "vision_only",
+        context: "Center of player card",
+      });
+
+      expect(mockTarget.findSemanticElement).not.toHaveBeenCalled();
+      expect(mockProvider.groundElement).toHaveBeenCalledWith("Play Video Button (Center of player card)", "dummybase64");
+      const data = JSON.parse(res.content[0].text);
+      expect(data.status).toBe("SUCCESS");
+      expect(data.method).toBe("tier2_local_vlm");
+    });
+  });
+
+  describe("Browser & Desktop Target Specific Tools", () => {
+    let browserTools: Record<string, Function> = {};
+    let mockBrowserTarget: BrowserTarget;
+
+    let desktopTools: Record<string, Function> = {};
+    let mockDesktopTarget: DesktopTarget;
+
+    beforeEach(() => {
+      browserTools = {};
+      const browserServer = {
+        tool: vi.fn((name: string, _desc: string, _schema: any, handler: Function) => {
+          browserTools[name] = handler;
+        }),
+      } as unknown as McpServer;
+
+      mockBrowserTarget = Object.assign(Object.create(BrowserTarget.prototype), {
+        name: "browser",
+        isReady: true,
+        getDistilledDom: vi.fn().mockResolvedValue([
+          { refId: "elem_1", tag: "button", text: "Login", selector: "button#login" },
+          { refId: "elem_2", tag: "input", text: "", selector: "input#email" },
+        ]),
+        navigate: vi.fn().mockResolvedValue({
+          status: 200,
+          url: "https://example.com/login",
+          title: "Login Page",
+        }),
+      });
+
+      registerTools(browserServer, mockBrowserTarget, mockProvider, mapper);
+
+      desktopTools = {};
+      const desktopServer = {
+        tool: vi.fn((name: string, _desc: string, _schema: any, handler: Function) => {
+          desktopTools[name] = handler;
+        }),
+      } as unknown as McpServer;
+
+      mockDesktopTarget = Object.assign(Object.create(DesktopTarget.prototype), {
+        name: "desktop",
+        isReady: true,
+        listWindows: vi.fn().mockResolvedValue([
+          { id: "1001", title: "Visual Studio Code", processName: "Code" },
+          { id: "1002", title: "Terminal", processName: "wt" },
+        ]),
+        focusWindow: vi.fn().mockImplementation(async (title: string) => {
+          return title.toLowerCase().includes("code");
+        }),
+        getDisplayMetrics: vi.fn().mockResolvedValue({ width: 1920, height: 1080, rotation: 0 }),
+      });
+
+      registerTools(desktopServer, mockDesktopTarget, mockProvider, mapper);
+    });
+
+    it("peep_browser_get_distilled_dom extracts landmark elements and saves tokens", async () => {
+      const res = await browserTools["peep_browser_get_distilled_dom"]({
+        selector: "form#loginForm",
+        maxDepth: 4,
+      });
+
+      const data = JSON.parse(res.content[0].text);
+      expect(data.status).toBe("SUCCESS");
+      expect(data.count).toBe(2);
+      expect(data.elements[0].refId).toBe("elem_1");
+      expect(data.cloudTokensSaved).toBeGreaterThan(0);
+      expect(mockBrowserTarget.getDistilledDom).toHaveBeenCalledWith("form#loginForm", 4);
+    });
+
+    it("peep_browser_get_distilled_dom returns UNSUPPORTED_TARGET on non-browser targets", async () => {
+      const res = await tools["peep_browser_get_distilled_dom"]({
+        selector: "body",
+      });
+
+      const data = JSON.parse(res.content[0].text);
+      expect(data.status).toBe("UNSUPPORTED_TARGET");
+      expect(data.target).toBe("android");
+    });
+
+    it("peep_browser_navigate interacts with BrowserTarget", async () => {
+      const res = await browserTools["peep_browser_navigate"]({
+        url: "https://example.com/login",
+        waitForLoad: true,
+        timeoutMs: 15000,
+      });
+
+      const data = JSON.parse(res.content[0].text);
+      expect(data.status).toBe("SUCCESS");
+      expect(data.httpStatus).toBe(200);
+      expect(data.url).toBe("https://example.com/login");
+      expect(data.title).toBe("Login Page");
+      expect(mockBrowserTarget.navigate).toHaveBeenCalledWith("https://example.com/login", true, 15000);
+    });
+
+    it("peep_browser_navigate returns UNSUPPORTED_TARGET on DesktopTarget", async () => {
+      const res = await desktopTools["peep_browser_navigate"]({
+        url: "https://example.com",
+      });
+
+      const data = JSON.parse(res.content[0].text);
+      expect(data.status).toBe("UNSUPPORTED_TARGET");
+      expect(data.target).toBe("desktop");
+    });
+
+    it("peep_window_management executes list, focus, and get_metrics actions on DesktopTarget", async () => {
+      // List
+      const listRes = await desktopTools["peep_window_management"]({ action: "list" });
+      const listData = JSON.parse(listRes.content[0].text);
+      expect(listData.status).toBe("SUCCESS");
+      expect(listData.count).toBe(2);
+      expect(listData.windows[0].title).toBe("Visual Studio Code");
+
+      // Focus found
+      const focusFoundRes = await desktopTools["peep_window_management"]({ action: "focus", title: "Code" });
+      const focusFoundData = JSON.parse(focusFoundRes.content[0].text);
+      expect(focusFoundData.status).toBe("SUCCESS");
+      expect(focusFoundData.focused).toBe(true);
+
+      // Focus not found
+      const focusMissingRes = await desktopTools["peep_window_management"]({ action: "focus", title: "NonExistent" });
+      const focusMissingData = JSON.parse(focusMissingRes.content[0].text);
+      expect(focusMissingData.status).toBe("NOT_FOUND");
+      expect(focusMissingData.focused).toBe(false);
+
+      // Focus without title throws Error
+      await expect(desktopTools["peep_window_management"]({ action: "focus" })).rejects.toThrow(
+        /title parameter required for focus action/
+      );
+
+      // Get metrics
+      const metricsRes = await desktopTools["peep_window_management"]({ action: "get_metrics" });
+      const metricsData = JSON.parse(metricsRes.content[0].text);
+      expect(metricsData.status).toBe("SUCCESS");
+      expect(metricsData.metrics.width).toBe(1920);
+    });
+
+    it("peep_window_management returns UNSUPPORTED_TARGET on non-desktop targets", async () => {
+      const res = await tools["peep_window_management"]({ action: "list" });
+      const data = JSON.parse(res.content[0].text);
+      expect(data.status).toBe("UNSUPPORTED_TARGET");
+      expect(data.target).toBe("android");
+    });
+
+    it("peep_get_device_state returns display metrics on DesktopTarget", async () => {
+      const res = await desktopTools["peep_get_device_state"]({});
+      const data = JSON.parse(res.content[0].text);
+      expect(data.status).toBe("SUCCESS");
+      expect(data.platform).toBe("desktop");
+      expect(data.display.width).toBe(1920);
+    });
+
+    it("returns UNSUPPORTED_TARGET for Android-only tools when called on DesktopTarget", async () => {
+      const toolsToTest = [
+        () => desktopTools["peep_install_app"]({ path: "test.apk" }),
+        () => desktopTools["peep_stop_app"]({ app: "test.pkg" }),
+        () => desktopTools["peep_clear_app_data"]({ app: "test.pkg" }),
+        () => desktopTools["peep_wake_and_unlock"]({}),
+        () => desktopTools["peep_clipboard"]({ action: "paste" }),
+        () => desktopTools["peep_open_deep_link"]({ url: "https://test.com" }),
+        () => desktopTools["peep_manage_permissions"]({ app: "test.pkg", action: "grant", permission: "CAMERA" }),
+        () => desktopTools["peep_set_screen_orientation"]({ orientation: "portrait" }),
+        () => desktopTools["peep_manage_files"]({ action: "delete", devicePath: "/test" }),
+        () => desktopTools["peep_list_apps"]({}),
+      ];
+
+      for (const runTool of toolsToTest) {
+        const res = await runTool();
+        const data = JSON.parse(res.content[0].text);
+        expect(data.status).toBe("UNSUPPORTED_TARGET");
+        expect(data.target).toBe("desktop");
+      }
     });
   });
 });

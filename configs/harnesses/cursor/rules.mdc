@@ -4,27 +4,61 @@ globs: **/*
 alwaysApply: true
 ---
 
-# Cursor Rule: Peep Token Shield
+# Cursor Rule: Peep Token Shield (v0.2.0)
 
-When automating Android apps, running mobile UI smoke tests, or investigating device crashes:
+When automating Android apps, running mobile UI smoke tests, or investigating device crashes in Cursor Composer or Chat:
 
 ## 1. Context Preservation Directives
 - **NEVER capture or request raw screenshots into the Composer / Chat context.** A single full-resolution frame burns 1,600 to 2,500 tokens.
 - **NEVER run raw `adb logcat` or pipe endless system logs into chat.** 
 - **Rely on Peep MCP tools for all peripheral operations.** Peep offloads vision grounding and log parsing to local models, returning only compact JSON telemetry (~40 tokens).
 
-## 2. Peep MCP Tool Reference
-- `peep_find_and_tap(target="...", strategy="auto")`: Taps element. Automatically checks UI accessibility tree first (~15ms, 0 tokens), then falls back to local vision perception.
-- `peep_type_text(target="...", text="...")`: Focuses field and types text.
+## 2. 🛑 Strict Engineering Rule: NEVER Call Raw ADB Shell Commands
+- Do NOT run raw `adb logcat` (burns 30k-75k tokens per invocation). Use `peep_tail_and_filter_logs` (~60 tokens).
+- Do NOT run raw `adb exec-out screencap` (burns 1,600-2,500 vision tokens). Use `peep_find_and_tap` (0 cloud vision tokens).
+- Do NOT run raw `adb shell input tap` (crash blind: returns 0 even when app crashed). Peep's synchronized watchdog catches crashes immediately.
+- Do NOT run raw `adb shell am start`. Use `peep_launch_app` for auto launcher activity resolution and crash checks.
+- Do NOT pipe screencaps through Windows PowerShell (CRLF corruption).
+
+## 3. Peep MCP Tool Reference (v0.2.0)
+### App Lifecycle & State
+- `peep_launch_app(app="...", stopExisting=true, resetState=false)`: Launches app with auto launcher activity resolution and startup crash check.
+- `peep_stop_app(app="...")`: Force stops package cleanly.
+- `peep_clear_app_data(app="...")`: Clears user data and app cache.
+- `peep_install_app(path="...")`: Installs APK with auto-granted permissions.
+- `peep_wake_and_unlock()`: Wakes display and dismisses keyguard.
+- `peep_get_device_state()`: Inspects foreground activity, resolution, and battery.
+- `peep_set_screen_orientation(orientation="portrait|landscape|auto")`: Manages screen rotation.
+- `peep_open_deep_link(url="...")`: Dispatches deep links.
+- `peep_manage_permissions(app="...", action="grant|revoke|list", permission="...")`: Manages runtime permissions.
+- `peep_list_apps(filter="third_party|system|all")`: Lists installed packages.
+- `peep_manage_files(action="push|pull|delete", devicePath="...", hostPath="...")`: File transfer with media scanner broadcast.
+- `peep_clipboard(action="set|get|paste", text="...")`: Safe clipboard operations.
+
+### Perception & Gestures
+- `peep_find_and_tap(target="...", strategy="auto")`: Taps element. Automatically checks UI accessibility tree first (~15ms, 0 tokens), then falls back to local vision model.
+- `peep_type_text(target="...", text="...", clearFirst=true)`: Focuses field and types text.
 - `peep_swipe(direction="up|down|left|right", distance="short|medium|long")`: Directional swipe gestures.
 - `peep_press_key(key="back|home|enter|tab")`: Dispatches hardware/navigation keys.
+
+### Assertions, Logs & Sub-Loops
 - `peep_assert_screen_state(expectedState="...")`: Visual assertion evaluated by local model (0 cloud tokens).
-- `peep_tail_and_filter_logs(searchCrashes=true)`: Fetches noise-filtered logs with local crash diagnosis.
+- `peep_tail_and_filter_logs(searchCrashes=true)`: Fetches noise-filtered logs with 3-line crash diagnosis.
 - `peep_execute_goal(goal="...", maxSteps=8)`: Hands multi-step sub-tasks to local autonomous micro-loop.
 - `peep_get_telemetry()`: Returns cumulative shielded tokens and cost savings.
 
-## 3. Direct CLI Terminal Alternative
+### Multi-Target Extensions
+- `peep_browser_navigate(url="...")`: Web navigation via Playwright or mobile Chrome.
+- `peep_browser_get_distilled_dom()`: Extracts distilled accessibility DOM tree.
+- `peep_window_management(action="list|focus|get_metrics")`: Desktop window manager.
+
+## 4. Direct CLI Terminal Alternative
 When operating in terminal mode:
+- `peep launch <package>`
+- `peep stop <package>`
+- `peep clear <package>`
+- `peep state`
+- `peep wake`
 - `peep tap "<target>"`
 - `peep type "<text>" --target "<field>"`
 - `peep swipe up`

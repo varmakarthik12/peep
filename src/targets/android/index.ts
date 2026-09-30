@@ -107,6 +107,127 @@ export class AndroidTarget extends BaseTarget {
     this.logcat.resetWatchdog();
   }
 
+  async launchApp(options: {
+    packageOrComponent: string;
+    stopExisting?: boolean;
+    resetState?: boolean;
+    waitForLaunch?: boolean;
+    extras?: Record<string, string | number | boolean>;
+  }) {
+    let packageName = options.packageOrComponent;
+    let activity: string | undefined;
+
+    if (packageName.includes("/")) {
+      const parts = packageName.split("/");
+      packageName = parts[0];
+      activity = parts[1];
+    }
+
+    if (options.resetState) {
+      try {
+        await this.adb.clearAppData(packageName);
+      } catch {
+        // ignore
+      }
+    }
+
+    const res = await this.adb.startActivity({
+      packageName,
+      activity,
+      stopFirst: options.stopExisting ?? true,
+      wait: options.waitForLaunch ?? true,
+      extras: options.extras,
+    });
+
+    await new Promise((r) => setTimeout(r, 300));
+    const watchdog = await this.checkCrashWatchdog();
+    if (watchdog.hasCrashed) {
+      return { ...res, crashDetected: watchdog.reason };
+    }
+    return res;
+  }
+
+  async installApp(
+    apkPath: string,
+    options?: { reinstall?: boolean; grantPermissions?: boolean; allowDowngrade?: boolean }
+  ) {
+    return this.adb.installApk(apkPath, options);
+  }
+
+  async uninstallApp(packageName: string, keepData?: boolean) {
+    return this.adb.uninstallApk(packageName, keepData);
+  }
+
+  async stopApp(packageName: string) {
+    return this.adb.forceStop(packageName);
+  }
+
+  async clearAppData(packageName: string) {
+    return this.adb.clearAppData(packageName);
+  }
+
+  async wakeAndUnlock(pinOrPassword?: string) {
+    return this.adb.wakeAndUnlock(pinOrPassword);
+  }
+
+  async setClipboard(text: string) {
+    return this.adb.setClipboard(text);
+  }
+
+  async getClipboard() {
+    return this.adb.getClipboard();
+  }
+
+  async pasteClipboard() {
+    return this.adb.pasteClipboard();
+  }
+
+  async getDeviceState() {
+    return this.adb.getDeviceState();
+  }
+
+  async openDeepLink(url: string, packageName?: string) {
+    const res = await this.adb.openDeepLink(url, packageName);
+    const watchdog = await this.checkCrashWatchdog();
+    if (watchdog.hasCrashed) {
+      return { ...res, crashDetected: watchdog.reason };
+    }
+    return res;
+  }
+
+  async managePermissions(
+    action: "grant" | "revoke" | "list",
+    packageName: string,
+    permission?: string
+  ) {
+    return this.adb.managePermissions(action, packageName, permission);
+  }
+
+  async setScreenOrientation(orientation: "portrait" | "landscape" | "auto") {
+    return this.adb.setScreenOrientation(orientation);
+  }
+
+  async manageFiles(
+    action: "push" | "pull" | "delete",
+    devicePath: string,
+    hostPath?: string,
+    triggerMediaScan?: boolean
+  ) {
+    return this.adb.manageFiles(action, devicePath, hostPath, triggerMediaScan);
+  }
+
+  async listApps(
+    filter?: "third_party" | "system" | "all",
+    search?: string,
+    limit?: number
+  ) {
+    return this.adb.listApps(filter, search, limit);
+  }
+
+  async getForegroundActivity() {
+    return this.adb.getForegroundActivity();
+  }
+
   async close(): Promise<void> {
     this.logcat.stop();
     await this.adb.close();

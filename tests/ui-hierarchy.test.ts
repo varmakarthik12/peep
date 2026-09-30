@@ -146,5 +146,42 @@ describe("UiHierarchyParser", () => {
       expect(el).not.toBeNull();
       expect(el?.text).toBe("Settings");
     });
+
+    it("returns null for empty or whitespace-only query without false positive matching", async () => {
+      const parser = new UiHierarchyParser(createMockAdb(sampleXml));
+      expect(await parser.findElement("")).toBeNull();
+      expect(await parser.findElement("   ")).toBeNull();
+      expect(await parser.findElement("\t\n")).toBeNull();
+    });
+
+    it("parses elements with negative coordinate bounds", async () => {
+      const negativeBoundsXml = `<?xml version='1.0' encoding='UTF-8' ?>
+<hierarchy rotation="0">
+  <node index="0" bounds="[-50,-100][500,600]">
+    <node index="0" text="Offscreen Header" bounds="[-50,-100][200,50]" clickable="true" />
+  </node>
+</hierarchy>`;
+      const parser = new UiHierarchyParser(createMockAdb(negativeBoundsXml));
+      const elements = await parser.dumpHierarchy();
+
+      expect(elements).toHaveLength(1);
+      expect(elements[0].bounds).toEqual({ left: -50, top: -100, right: 200, bottom: 50 });
+      expect(elements[0].text).toBe("Offscreen Header");
+    });
+
+    it("safely skips nodes with invalid or unparseable bounds syntax", async () => {
+      const badBoundsXml = `<?xml version='1.0' encoding='UTF-8' ?>
+<hierarchy rotation="0">
+  <node index="0" bounds="invalid-bounds-format">
+    <node index="0" text="Malformed Bounds Node" bounds="not-a-box" clickable="true" />
+    <node index="1" text="Valid Node" bounds="[10,20][30,40]" clickable="true" />
+  </node>
+</hierarchy>`;
+      const parser = new UiHierarchyParser(createMockAdb(badBoundsXml));
+      const elements = await parser.dumpHierarchy();
+
+      expect(elements).toHaveLength(1);
+      expect(elements[0].text).toBe("Valid Node");
+    });
   });
 });

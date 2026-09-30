@@ -147,11 +147,25 @@ Peep maintains an asynchronous background tailer connected to `adb shell logcat 
 
 ---
 
-## 5. Target Abstraction Layer
+## 5. Multi-Target Abstraction Layer (v0.2.0)
 
-Peep defines an extensible `BaseTarget` contract:
-- `AndroidTarget`: Implemented via ADB and optional scrcpy streaming.
-- `BrowserTarget` *(Roadmap v0.2)*: Connects via Chrome DevTools Protocol (CDP) / Playwright.
-- `DesktopTarget` *(Roadmap v0.2)*: Native OS window and input control via MSS / PyAutoGUI / robotjs.
+Peep defines an extensible `BaseTarget` contract managed by a unified `TargetManager` that supports multiple targets enabled simultaneously:
+- **`AndroidTarget`** *(Production Ready)*: Implemented via ADB with automatic device discovery, zero-config port resolution, accessibility hierarchy dumps, scrcpy/screencap frame capture, and ring-buffered logcat monitoring.
+- **`BrowserTarget`** *(v0.2 Playwright Adapter)*: Web automation adapter with distilled semantic DOM extraction (`peep_browser_get_distilled_dom`) and browser navigation (`peep_browser_navigate`).
+- **`DesktopTarget`** *(v0.2 Window Manager Adapter)*: Native OS window and input control (`peep_window_management`) across macOS, Windows, and Linux.
+- **`iOSTarget`** *(v0.2 Scaffold)*: Extensible adapter stub for Apple device instrumentation (IDB / XCUITest).
 
-Any peripheral device that can yield a screen buffer and accept inputs can be shielded by Peep.
+All enabled platforms initialize simultaneously at startup. Tool calls auto-route to `defaultPlatform: "android"` or honor explicit `platform: "android" | "browser" | "desktop" | "ios"` parameters. If an adapter scaffold is invoked, Peep responds with a structured, non-fatal notification (`UNSUPPORTED_PLATFORM`) that guides the harness without crashing the agentic reasoning loop.
+
+---
+
+## 6. The Anti-Raw-ADB Architectural Principle
+
+A central thesis of Peep v0.2.0 is that AI coding harnesses must never execute raw `adb` shell commands directly. Allowing an LLM agent to execute unmediated `adb` commands creates severe failure modes:
+1. **Context Saturation**: Unfiltered `adb logcat` dumps 2,000–5,000 lines into context, obliterating working memory with Garbage Collection and Choreographer events.
+2. **Vision Cost Explosions**: Direct screenshot commands burn 1,600–2,500 cloud tokens per invocation.
+3. **Crash Blindness**: Unmediated shell taps return exit code `0` even when the target app has died or thrown an ANR.
+4. **Transport Fragility**: Direct streaming over shell pipes introduces platform-specific byte corruption (e.g. Windows PowerShell CRLF translations corrupting binary PNG streams).
+
+Peep acts as a strict **Peripheral Proxy**: all inputs, assertions, lifecycle events, and log streams pass through calibrated sanitization gates, returning ultra-compact, high-signal JSON to the frontier model.
+

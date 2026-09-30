@@ -9,11 +9,30 @@ When assisting with Android application development, mobile UI testing, device a
 
 ---
 
-## 2. CLI Command Patterns for Device Automation
+## 2. 🛑 Strict Engineering Rule: NEVER Call Raw ADB Shell Commands
+- Do NOT run raw `adb logcat` (burns 30k-75k tokens per invocation). Use `peep logs --crashes`.
+- Do NOT run raw `adb exec-out screencap` (burns 1,600-2,500 vision tokens). Use `peep tap` or `peep assert`.
+- Do NOT run raw `adb shell input tap` (crash blind: returns exit code 0 even when app crashed). Peep's synchronized watchdog catches crashes immediately.
+- Do NOT run raw `adb shell am start`. Use `peep launch` for automatic launcher activity resolution and startup crash checks.
+
+---
+
+## 3. CLI Command Patterns for Device Automation (v0.2.0)
 
 When generating terminal commands or automation tasks, use:
 
 ```bash
+# App Lifecycle & State
+peep launch com.example.app/.MainActivity
+peep stop com.example.app
+peep clear com.example.app
+peep install ./app-release.apk
+peep state
+peep wake
+peep clipboard set "secret_token_123"
+peep deeplink "myapp://checkout/confirmation"
+peep apps --filter third_party
+
 # Tapping UI elements (Tier 0 UI hierarchy / Tier 2 local vision)
 peep tap "Login Button"
 peep tap "Shopping Cart Icon"
@@ -44,7 +63,7 @@ peep stats
 
 ---
 
-## 3. Crash Diagnostics Assistance
+## 4. Crash Diagnostics Assistance
 When an app crashes or a test step fails:
 1. Advise running `peep logs --crashes`.
 2. Inspect the returned 3-line diagnostic (`hasFatalError`, `culprit`, `summary`).

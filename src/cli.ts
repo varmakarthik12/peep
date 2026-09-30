@@ -3,7 +3,7 @@ import pc from "picocolors";
 import { loadConfig } from "./config/index.js";
 import { startMcpServer } from "./server/index.js";
 import { createProvider } from "./providers/index.js";
-import { TargetManager, AndroidTarget, BaseTarget } from "./targets/index.js";
+import { TargetManager, AndroidTarget, BrowserTarget, DesktopTarget, BaseTarget, DistilledElement, DesktopWindowInfo } from "./targets/index.js";
 import { CoordinateMapper } from "./core/coordinate-mapper.js";
 import { GestureEngine, SwipeDirection, SwipeDistance } from "./core/gesture-engine.js";
 import { MacroRunner } from "./core/macro-runner.js";
@@ -17,7 +17,7 @@ const program = new Command();
 program
   .name("peep")
   .description("Peripheral Evaluation & Execution Proxy: The Open-Source Token Shield for Autonomous Agents")
-  .version("0.1.0")
+  .version("0.2.0")
   .option("-c, --config <path>", "Path to peep.yaml config file")
   .option("--log-level <level>", "Log level: debug, info, warn, error, silent", "info")
   .option("-d, --device <id>", "Explicit Android device/emulator serial ID (e.g. emulator-5554, 127.0.0.1:7555)")
@@ -280,7 +280,7 @@ program
   .command("tap <target>")
   .description("Locate and tap a UI element on the screen")
   .option("-s, --strategy <strategy>", "Perception strategy: auto, tree_first, vision_only, tree_only", "auto")
-  .option("-p, --platform <platform>", "Target platform: android, browser, desktop")
+  .option("-p, --platform <platform>", "Target platform: android, browser, desktop, ios")
   .option("--context <hint>", "Contextual visual hint")
   .option("--json", "Output result as JSON")
   .action(async (targetDesc: string, cmdOpts) => {
@@ -296,17 +296,15 @@ program
 
     // Tier 0/1: UI tree
     if (cmdOpts.strategy === "auto" || cmdOpts.strategy === "tree_first" || cmdOpts.strategy === "tree_only") {
-      if (target instanceof AndroidTarget) {
-        const el = await target.findSemanticElement(targetDesc);
-        if (el) {
-          const cx = Math.round((el.bounds.left + el.bounds.right) / 2);
-          const cy = Math.round((el.bounds.top + el.bounds.bottom) / 2);
-          await target.tap(cx, cy);
-          tapped = true;
-          point = [cx, cy];
-          method = "tier0_semantic_tree";
-          tokenShield.recordShieldedScreenshot(50);
-        }
+      const el = await target.findSemanticElement(targetDesc);
+      if (el) {
+        const cx = Math.round((el.bounds.left + el.bounds.right) / 2);
+        const cy = Math.round((el.bounds.top + el.bounds.bottom) / 2);
+        await target.tap(cx, cy);
+        tapped = true;
+        point = [cx, cy];
+        method = "tier0_semantic_tree";
+        tokenShield.recordShieldedScreenshot(50);
       }
     }
 
@@ -357,14 +355,14 @@ program
   .command("type <text>")
   .description("Type text into the device input field")
   .option("-t, --target <target>", "Target field to tap and focus first")
-  .option("-p, --platform <platform>", "Target platform: android, browser, desktop")
+  .option("-p, --platform <platform>", "Target platform: android, browser, desktop, ios")
   .option("--clear", "Clear field first", false)
   .option("--json", "Output result as JSON")
   .action(async (text: string, cmdOpts) => {
     const { targetManager } = getTargetManagerAndConfig();
     const target = await resolveAndInitTarget(targetManager, cmdOpts.platform as TargetPlatform, cmdOpts.json);
 
-    if (cmdOpts.target && target instanceof AndroidTarget) {
+    if (cmdOpts.target) {
       const el = await target.findSemanticElement(cmdOpts.target);
       if (el) {
         const cx = Math.round((el.bounds.left + el.bounds.right) / 2);
@@ -395,7 +393,7 @@ program
   .command("swipe <direction>")
   .description("Perform a swipe gesture: up, down, left, right")
   .option("-d, --distance <dist>", "Distance: short, medium, long", "medium")
-  .option("-p, --platform <platform>", "Target platform: android, browser, desktop")
+  .option("-p, --platform <platform>", "Target platform: android, browser, desktop, ios")
   .option("--json", "Output result as JSON")
   .action(async (direction: string, cmdOpts) => {
     const validDirections: SwipeDirection[] = ["up", "down", "left", "right"];
@@ -428,7 +426,7 @@ program
 program
   .command("press <key>")
   .description("Dispatch hardware or navigation key (back, home, enter, tab, volume_up)")
-  .option("-p, --platform <platform>", "Target platform: android, browser, desktop")
+  .option("-p, --platform <platform>", "Target platform: android, browser, desktop, ios")
   .option("--json", "Output result as JSON")
   .action(async (key: string, cmdOpts) => {
     const { targetManager } = getTargetManagerAndConfig();
@@ -454,7 +452,7 @@ program
 program
   .command("assert <condition>")
   .description("Visually assert if a condition is true on the active screen using local model")
-  .option("-p, --platform <platform>", "Target platform: android, browser, desktop")
+  .option("-p, --platform <platform>", "Target platform: android, browser, desktop, ios")
   .option("--json", "Output result as JSON")
   .action(async (condition: string, cmdOpts) => {
     const { targetManager, provider } = getTargetManagerAndConfig();
@@ -494,7 +492,7 @@ program
   .option("--crashes", "Run local model crash and fatal error diagnosis", false)
   .option("-f, --filter <pattern>", "Filter by substring or regex")
   .option("-n, --limit <lines>", "Number of recent lines to display", "30")
-  .option("-p, --platform <platform>", "Target platform: android, browser, desktop")
+  .option("-p, --platform <platform>", "Target platform: android, browser, desktop, ios")
   .option("--json", "Output result as JSON")
   .action(async (cmdOpts) => {
     const { targetManager, provider } = getTargetManagerAndConfig();
@@ -544,7 +542,7 @@ program
   .command("goal <task>")
   .description("Autonomous local micro-loop: execute high-level goal using local model")
   .option("-m, --max-steps <num>", "Maximum iterations", "8")
-  .option("-p, --platform <platform>", "Target platform: android, browser, desktop")
+  .option("-p, --platform <platform>", "Target platform: android, browser, desktop, ios")
   .option("--json", "Output result as JSON")
   .action(async (task: string, cmdOpts) => {
     const { config, targetManager, provider } = getTargetManagerAndConfig();
@@ -654,6 +652,534 @@ program
         "\n* Based on standard multimodal pricing: $5.00 / 1M tokens. Resolution 1080x2400 @ 1,600 tokens/frame.\n"
       )
     );
+  });
+
+// 12. peep launch <app>
+program
+  .command("launch <app>")
+  .description("Launch an application by package or component with automatic crash watchdog")
+  .option("--no-stop", "Do not force stop existing instance before launching")
+  .option("--reset", "Clear app data before launching (cold start)", false)
+  .option("--no-wait", "Do not wait for initial activity launch to finish")
+  .option("-p, --platform <platform>", "Target platform: android, browser, desktop, ios")
+  .option("--json", "Output result as JSON")
+  .action(async (app: string, cmdOpts) => {
+    const { targetManager } = getTargetManagerAndConfig();
+    const target = await resolveAndInitTarget(targetManager, cmdOpts.platform as TargetPlatform, cmdOpts.json);
+
+    if (target instanceof AndroidTarget) {
+      try {
+        const res = await target.launchApp({
+          packageOrComponent: app,
+          stopExisting: cmdOpts.stop,
+          resetState: cmdOpts.reset,
+          waitForLaunch: cmdOpts.wait,
+        });
+        await targetManager.closeAll();
+
+        if (cmdOpts.json) {
+          console.log(JSON.stringify({ status: res.crashDetected ? "CRASH_DETECTED" : "SUCCESS", ...res }, null, 2));
+        } else {
+          if (res.crashDetected) {
+            console.error(pc.red(`✗ [CRASH DETECTED] App ${app} crashed on startup: ${res.crashDetected}`));
+            process.exit(1);
+          } else {
+            console.log(pc.green(`✓ [OK] Launched ${app} (${res.totalTimeMs || 0}ms)`));
+          }
+        }
+      } catch (err) {
+        await targetManager.closeAll();
+        console.error(pc.red(`✗ [FAIL] ${err instanceof Error ? err.message : String(err)}`));
+        process.exit(1);
+      }
+    } else {
+      await targetManager.closeAll();
+      console.error(pc.red(`✗ Launch command only supported on Android target currently.`));
+      process.exit(1);
+    }
+  });
+
+// 13. peep stop <app>
+program
+  .command("stop <app>")
+  .description("Force stop an application process")
+  .option("-p, --platform <platform>", "Target platform: android, browser, desktop, ios")
+  .option("--json", "Output result as JSON")
+  .action(async (app: string, cmdOpts) => {
+    const { targetManager } = getTargetManagerAndConfig();
+    const target = await resolveAndInitTarget(targetManager, cmdOpts.platform as TargetPlatform, cmdOpts.json);
+
+    if (target instanceof AndroidTarget) {
+      await target.stopApp(app);
+      await targetManager.closeAll();
+      if (cmdOpts.json) {
+        console.log(JSON.stringify({ status: "SUCCESS", stopped: app }));
+      } else {
+        console.log(pc.green(`✓ [OK] Force-stopped ${app}`));
+      }
+    } else {
+      await targetManager.closeAll();
+      if (cmdOpts.json) console.log(JSON.stringify({ status: "UNSUPPORTED_TARGET", target: target.name }));
+      else console.error(pc.red(`✗ Stop command only supported on Android target currently.`));
+      process.exit(1);
+    }
+  });
+
+// 14. peep clear <app>
+program
+  .command("clear <app>")
+  .description("Clear application user data and cache (reset to factory state)")
+  .option("-p, --platform <platform>", "Target platform: android, browser, desktop, ios")
+  .option("--json", "Output result as JSON")
+  .action(async (app: string, cmdOpts) => {
+    const { targetManager } = getTargetManagerAndConfig();
+    const target = await resolveAndInitTarget(targetManager, cmdOpts.platform as TargetPlatform, cmdOpts.json);
+
+    if (target instanceof AndroidTarget) {
+      await target.clearAppData(app);
+      await targetManager.closeAll();
+      if (cmdOpts.json) {
+        console.log(JSON.stringify({ status: "SUCCESS", cleared: app }));
+      } else {
+        console.log(pc.green(`✓ [OK] Cleared app data for ${app}`));
+      }
+    } else {
+      await targetManager.closeAll();
+      if (cmdOpts.json) console.log(JSON.stringify({ status: "UNSUPPORTED_TARGET", target: target.name }));
+      else console.error(pc.red(`✗ Clear command only supported on Android target currently.`));
+      process.exit(1);
+    }
+  });
+
+// 15. peep wake
+program
+  .command("wake")
+  .description("Wake screen and dismiss lockscreen/keyguard")
+  .option("--pin <pin>", "Optional unlock PIN or password")
+  .option("-p, --platform <platform>", "Target platform: android, browser, desktop, ios")
+  .option("--json", "Output result as JSON")
+  .action(async (cmdOpts) => {
+    const { targetManager } = getTargetManagerAndConfig();
+    const target = await resolveAndInitTarget(targetManager, cmdOpts.platform as TargetPlatform, cmdOpts.json);
+
+    if (target instanceof AndroidTarget) {
+      const res = await target.wakeAndUnlock(cmdOpts.pin);
+      await targetManager.closeAll();
+      if (cmdOpts.json) {
+        console.log(JSON.stringify({ status: "SUCCESS", ...res }));
+      } else {
+        console.log(pc.green("✓ [OK] Device screen awake and keyguard dismissed."));
+      }
+    } else {
+      await targetManager.closeAll();
+      if (cmdOpts.json) console.log(JSON.stringify({ status: "UNSUPPORTED_TARGET", target: target.name }));
+      else console.error(pc.red(`✗ Wake command only supported on Android target currently.`));
+      process.exit(1);
+    }
+  });
+
+// 16. peep clipboard <action> [text]
+program
+  .command("clipboard <action> [text]")
+  .description("Clipboard operations: set, get, paste")
+  .option("-p, --platform <platform>", "Target platform: android, browser, desktop, ios")
+  .option("--json", "Output result as JSON")
+  .action(async (action: string, text: string | undefined, cmdOpts) => {
+    const { targetManager } = getTargetManagerAndConfig();
+    const target = await resolveAndInitTarget(targetManager, cmdOpts.platform as TargetPlatform, cmdOpts.json);
+
+    if (target instanceof AndroidTarget) {
+      if (action === "set") {
+        if (!text) {
+          console.error(pc.red("✗ [FAIL] Text argument is required for 'set' action"));
+          await targetManager.closeAll();
+          process.exit(1);
+        }
+        await target.setClipboard(text);
+        await targetManager.closeAll();
+        if (cmdOpts.json) console.log(JSON.stringify({ status: "SUCCESS", action: "set", length: text.length }));
+        else console.log(pc.green(`✓ [OK] Clipboard set (${text.length} chars)`));
+      } else if (action === "get") {
+        const val = await target.getClipboard();
+        await targetManager.closeAll();
+        if (cmdOpts.json) console.log(JSON.stringify({ status: "SUCCESS", text: val }));
+        else console.log(pc.green(`✓ [OK] Clipboard: "${val}"`));
+      } else if (action === "paste") {
+        await target.pasteClipboard();
+        await targetManager.closeAll();
+        if (cmdOpts.json) console.log(JSON.stringify({ status: "SUCCESS", action: "paste" }));
+        else console.log(pc.green("✓ [OK] Dispatched paste"));
+      } else {
+        await targetManager.closeAll();
+        console.error(pc.red(`✗ Unknown action '${action}'. Use set, get, or paste.`));
+        process.exit(1);
+      }
+    } else {
+      await targetManager.closeAll();
+      if (cmdOpts.json) console.log(JSON.stringify({ status: "UNSUPPORTED_TARGET", target: target.name }));
+      else console.error(pc.red(`✗ Clipboard command only supported on Android target currently.`));
+      process.exit(1);
+    }
+  });
+
+// 17. peep state
+program
+  .command("state")
+  .description("Inspect current device state (foreground app, orientation, battery, resolution)")
+  .option("-p, --platform <platform>", "Target platform: android, browser, desktop, ios")
+  .option("--json", "Output result as JSON")
+  .action(async (cmdOpts) => {
+    const { targetManager } = getTargetManagerAndConfig();
+    const target = await resolveAndInitTarget(targetManager, cmdOpts.platform as TargetPlatform, cmdOpts.json);
+
+    if (target instanceof AndroidTarget) {
+      const state = await target.getDeviceState();
+      await targetManager.closeAll();
+      if (cmdOpts.json) {
+        console.log(JSON.stringify(state, null, 2));
+      } else {
+        console.log(pc.bold(pc.cyan("\nDevice State:")));
+        console.log(`  Foreground Package: ${pc.green(state.foreground.packageName || "None")}`);
+        console.log(`  Foreground Activity: ${pc.green(state.foreground.activity || "None")}`);
+        console.log(`  Resolution: ${state.display.width}x${state.display.height} (rotation: ${state.display.rotation}°)`);
+        console.log(`  Battery Level: ${state.battery.level !== undefined ? `${state.battery.level}%` : "Unknown"}`);
+        console.log(`  Charging: ${state.battery.charging ? pc.green("Yes") : "No"}\n`);
+      }
+    } else {
+      const metrics = await target.getDisplayMetrics();
+      await targetManager.closeAll();
+      console.log(JSON.stringify({ platform: target.name, display: metrics }, null, 2));
+    }
+  });
+
+// 18. peep apps
+program
+  .command("apps")
+  .description("List installed applications on device")
+  .option("-f, --filter <type>", "Filter: third_party, system, all", "third_party")
+  .option("-s, --search <str>", "Search string")
+  .option("-n, --limit <num>", "Limit results", "30")
+  .option("-p, --platform <platform>", "Target platform: android, browser, desktop, ios")
+  .option("--json", "Output result as JSON")
+  .action(async (cmdOpts) => {
+    const { targetManager } = getTargetManagerAndConfig();
+    const target = await resolveAndInitTarget(targetManager, cmdOpts.platform as TargetPlatform, cmdOpts.json);
+
+    if (target instanceof AndroidTarget) {
+      const apps = await target.listApps(
+        cmdOpts.filter as "third_party" | "system" | "all",
+        cmdOpts.search,
+        parseInt(cmdOpts.limit, 10)
+      );
+      await targetManager.closeAll();
+      if (cmdOpts.json) {
+        console.log(JSON.stringify(apps, null, 2));
+      } else {
+        console.log(pc.bold(pc.cyan(`\nInstalled Apps (${apps.length} found):\n`)));
+        apps.forEach((a) => console.log(`  • ${a.packageName}`));
+        console.log("");
+      }
+    } else {
+      await targetManager.closeAll();
+      if (cmdOpts.json) console.log(JSON.stringify({ status: "UNSUPPORTED_TARGET", target: target.name }));
+      else console.error(pc.red(`✗ Apps command only supported on Android target currently.`));
+      process.exit(1);
+    }
+  });
+
+// 19. peep install <path>
+program
+  .command("install <path>")
+  .description("Install APK file onto device with automatic runtime permissions")
+  .option("--no-grant", "Do not automatically grant all runtime permissions")
+  .option("--no-reinstall", "Do not reinstall if package exists")
+  .option("-d, --downgrade", "Allow version code downgrade", false)
+  .option("-p, --platform <platform>", "Target platform: android, browser, desktop, ios")
+  .option("--json", "Output result as JSON")
+  .action(async (apkPath: string, cmdOpts) => {
+    const { targetManager } = getTargetManagerAndConfig();
+    const target = await resolveAndInitTarget(targetManager, cmdOpts.platform as TargetPlatform, cmdOpts.json);
+
+    if (target instanceof AndroidTarget) {
+      try {
+        await target.installApp(apkPath, {
+          grantPermissions: cmdOpts.grant,
+          reinstall: cmdOpts.reinstall,
+          allowDowngrade: cmdOpts.downgrade,
+        });
+        await targetManager.closeAll();
+        if (cmdOpts.json) console.log(JSON.stringify({ status: "SUCCESS", path: apkPath }));
+        else console.log(pc.green(`✓ [OK] Successfully installed APK: ${apkPath}`));
+      } catch (err) {
+        await targetManager.closeAll();
+        console.error(pc.red(`✗ [FAIL] ${err instanceof Error ? err.message : String(err)}`));
+        process.exit(1);
+      }
+    } else {
+      await targetManager.closeAll();
+      if (cmdOpts.json) console.log(JSON.stringify({ status: "UNSUPPORTED_TARGET", target: target.name }));
+      else console.error(pc.red(`✗ Install command only supported on Android target currently.`));
+      process.exit(1);
+    }
+  });
+
+// 20. peep deeplink <url>
+program
+  .command("deeplink <url>")
+  .description("Dispatch a deep link URI or URL via intent")
+  .option("-a, --app <package>", "Target application package name")
+  .option("-p, --platform <platform>", "Target platform: android, browser, desktop, ios")
+  .option("--json", "Output result as JSON")
+  .action(async (url: string, cmdOpts) => {
+    const { targetManager } = getTargetManagerAndConfig();
+    const target = await resolveAndInitTarget(targetManager, cmdOpts.platform as TargetPlatform, cmdOpts.json);
+
+    if (target instanceof AndroidTarget) {
+      const res = await target.openDeepLink(url, cmdOpts.app);
+      await targetManager.closeAll();
+      if (cmdOpts.json) {
+        console.log(JSON.stringify({ status: "SUCCESS", ...res }, null, 2));
+      } else {
+        console.log(pc.green(`✓ [OK] Dispatched deep link: ${url}`));
+        if (res.resolvedPackage) console.log(pc.dim(`  Resolved package: ${res.resolvedPackage}`));
+      }
+    } else {
+      await targetManager.closeAll();
+      if (cmdOpts.json) console.log(JSON.stringify({ status: "UNSUPPORTED_TARGET", target: target.name }));
+      else console.error(pc.red(`✗ Deep link command only supported on Android target currently.`));
+      process.exit(1);
+    }
+  });
+
+// 21. peep permission <app> <action> [permission]
+program
+  .command("permission <app> <action> [permission]")
+  .description("Manage runtime permissions: grant, revoke, list")
+  .option("-p, --platform <platform>", "Target platform: android, browser, desktop, ios")
+  .option("--json", "Output result as JSON")
+  .action(async (app: string, action: string, permission: string | undefined, cmdOpts) => {
+    const validActions = ["grant", "revoke", "list"];
+    if (!validActions.includes(action)) {
+      console.error(pc.red(`✗ Invalid action '${action}'. Must be one of: ${validActions.join(", ")}`));
+      process.exit(1);
+    }
+
+    const { targetManager } = getTargetManagerAndConfig();
+    const target = await resolveAndInitTarget(targetManager, cmdOpts.platform as TargetPlatform, cmdOpts.json);
+
+    if (target instanceof AndroidTarget) {
+      try {
+        const res = await target.managePermissions(action as "grant" | "revoke" | "list", app, permission);
+        await targetManager.closeAll();
+        if (cmdOpts.json) {
+          console.log(JSON.stringify({ status: "SUCCESS", app, action, ...res }, null, 2));
+        } else {
+          console.log(pc.green(`✓ [OK] Permission ${action} succeeded for ${app}`));
+          if (res.permissions.length > 0) {
+            res.permissions.forEach((p) => console.log(pc.dim(`  • ${p}`)));
+          }
+        }
+      } catch (err) {
+        await targetManager.closeAll();
+        console.error(pc.red(`✗ [FAIL] ${err instanceof Error ? err.message : String(err)}`));
+        process.exit(1);
+      }
+    } else {
+      await targetManager.closeAll();
+      if (cmdOpts.json) console.log(JSON.stringify({ status: "UNSUPPORTED_TARGET", target: target.name }));
+      else console.error(pc.red(`✗ Permission command only supported on Android target currently.`));
+      process.exit(1);
+    }
+  });
+
+// 22. peep orientation <orientation>
+program
+  .command("orientation <orientation>")
+  .description("Set screen orientation: portrait, landscape, auto")
+  .option("-p, --platform <platform>", "Target platform: android, browser, desktop, ios")
+  .option("--json", "Output result as JSON")
+  .action(async (orientation: string, cmdOpts) => {
+    const validOrientations = ["portrait", "landscape", "auto"];
+    if (!validOrientations.includes(orientation)) {
+      console.error(pc.red(`✗ Invalid orientation '${orientation}'. Must be one of: ${validOrientations.join(", ")}`));
+      process.exit(1);
+    }
+
+    const { targetManager } = getTargetManagerAndConfig();
+    const target = await resolveAndInitTarget(targetManager, cmdOpts.platform as TargetPlatform, cmdOpts.json);
+
+    if (target instanceof AndroidTarget) {
+      await target.setScreenOrientation(orientation as "portrait" | "landscape" | "auto");
+      await targetManager.closeAll();
+      if (cmdOpts.json) console.log(JSON.stringify({ status: "SUCCESS", orientation }));
+      else console.log(pc.green(`✓ [OK] Screen orientation set to ${orientation}`));
+    } else {
+      await targetManager.closeAll();
+      if (cmdOpts.json) console.log(JSON.stringify({ status: "UNSUPPORTED_TARGET", target: target.name }));
+      else console.error(pc.red(`✗ Orientation command only supported on Android target currently.`));
+      process.exit(1);
+    }
+  });
+
+// 23. peep file <action> <devicePath> [hostPath]
+program
+  .command("file <action> <devicePath> [hostPath]")
+  .description("File transfer operations: push, pull, delete")
+  .option("-p, --platform <platform>", "Target platform: android, browser, desktop, ios")
+  .option("--json", "Output result as JSON")
+  .action(async (action: string, devicePath: string, hostPath: string | undefined, cmdOpts) => {
+    const validActions = ["push", "pull", "delete"];
+    if (!validActions.includes(action)) {
+      console.error(pc.red(`✗ Invalid action '${action}'. Must be one of: ${validActions.join(", ")}`));
+      process.exit(1);
+    }
+
+    const { targetManager } = getTargetManagerAndConfig();
+    const target = await resolveAndInitTarget(targetManager, cmdOpts.platform as TargetPlatform, cmdOpts.json);
+
+    if (target instanceof AndroidTarget) {
+      try {
+        const res = await target.manageFiles(action as "push" | "pull" | "delete", devicePath, hostPath);
+        await targetManager.closeAll();
+        if (cmdOpts.json) console.log(JSON.stringify({ status: "SUCCESS", ...res }, null, 2));
+        else console.log(pc.green(`✓ [OK] ${res.message || "File operation complete."}`));
+      } catch (err) {
+        await targetManager.closeAll();
+        console.error(pc.red(`✗ [FAIL] ${err instanceof Error ? err.message : String(err)}`));
+        process.exit(1);
+      }
+    } else {
+      await targetManager.closeAll();
+      if (cmdOpts.json) console.log(JSON.stringify({ status: "UNSUPPORTED_TARGET", target: target.name }));
+      else console.error(pc.red(`✗ File command only supported on Android target currently.`));
+      process.exit(1);
+    }
+  });
+
+// 24. peep browse <url>
+program
+  .command("browse <url>")
+  .description("Navigate browser or Android Chrome to URL")
+  .option("-p, --platform <platform>", "Target platform: browser, android")
+  .option("--json", "Output result as JSON")
+  .action(async (url: string, cmdOpts) => {
+    const { targetManager } = getTargetManagerAndConfig();
+    const selected = (cmdOpts.platform as TargetPlatform) || "browser";
+    const target = targetManager.getTarget(selected);
+
+    if (target instanceof BrowserTarget) {
+      try {
+        const res = await target.navigate(url);
+        await targetManager.closeAll();
+        if (cmdOpts.json) console.log(JSON.stringify({ status: "SUCCESS", httpStatus: res.status, url: res.url, title: res.title }, null, 2));
+        else console.log(pc.green(`✓ [OK] Navigated to ${res.url} (${res.title})`));
+      } catch (err) {
+        await targetManager.closeAll();
+        console.error(pc.red(`✗ [FAIL] ${err instanceof Error ? err.message : String(err)}`));
+        process.exit(1);
+      }
+    } else if (target instanceof AndroidTarget) {
+      await resolveAndInitTarget(targetManager, "android", cmdOpts.json);
+      const res = await target.openDeepLink(url, "com.android.chrome");
+      await targetManager.closeAll();
+      if (cmdOpts.json) console.log(JSON.stringify({ status: "SUCCESS", method: "android_chrome", ...res }, null, 2));
+      else console.log(pc.green(`✓ [OK] Dispatched URL to Chrome: ${url}`));
+    } else {
+      await targetManager.closeAll();
+      if (cmdOpts.json) console.log(JSON.stringify({ status: "UNSUPPORTED_TARGET", target: target.name }));
+      else console.error(pc.red(`✗ Browse command not supported on target '${target.name}'.`));
+      process.exit(1);
+    }
+  });
+
+// 25. peep dom
+program
+  .command("dom")
+  .description("Extract distilled interactive DOM representation (Browser target)")
+  .option("-s, --selector <sel>", "Root selector", "body")
+  .option("-d, --depth <num>", "Max DOM depth", "5")
+  .option("--json", "Output result as JSON")
+  .action(async (cmdOpts) => {
+    const { targetManager } = getTargetManagerAndConfig();
+    const target = targetManager.getTarget("browser");
+
+    if (target instanceof BrowserTarget) {
+      try {
+        const elements = await target.getDistilledDom(cmdOpts.selector, parseInt(cmdOpts.depth, 10));
+        await targetManager.closeAll();
+        if (cmdOpts.json) {
+          console.log(JSON.stringify({ status: "SUCCESS", count: elements.length, elements }, null, 2));
+        } else {
+          console.log(pc.bold(pc.cyan(`\nDistilled DOM Elements (${elements.length} interactive items):\n`)));
+          elements.forEach((el: DistilledElement) => {
+            console.log(`  [${pc.green(el.refId)}] <${el.tag}> ${pc.bold(el.text || el.role || "")} (${el.selector})`);
+          });
+          console.log("");
+        }
+      } catch (err) {
+        await targetManager.closeAll();
+        console.error(pc.red(`✗ [FAIL] ${err instanceof Error ? err.message : String(err)}`));
+        process.exit(1);
+      }
+    } else {
+      await targetManager.closeAll();
+      if (cmdOpts.json) console.log(JSON.stringify({ status: "UNSUPPORTED_TARGET", target: target.name }));
+      else console.error(pc.red(`✗ DOM distillation only supported on Browser target.`));
+      process.exit(1);
+    }
+  });
+
+// 26. peep window <action> [title]
+program
+  .command("window <action> [title]")
+  .description("Desktop window management: list, focus, metrics")
+  .option("--json", "Output result as JSON")
+  .action(async (action: string, title: string | undefined, cmdOpts) => {
+    const validActions = ["list", "focus", "metrics"];
+    if (!validActions.includes(action)) {
+      console.error(pc.red(`✗ Invalid action '${action}'. Must be one of: ${validActions.join(", ")}`));
+      process.exit(1);
+    }
+
+    const { targetManager } = getTargetManagerAndConfig();
+    const target = targetManager.getTarget("desktop");
+
+    if (target instanceof DesktopTarget) {
+      if (action === "list") {
+        const windows = await target.listWindows();
+        await targetManager.closeAll();
+        if (cmdOpts.json) console.log(JSON.stringify({ status: "SUCCESS", count: windows.length, windows }, null, 2));
+        else {
+          console.log(pc.bold(pc.cyan(`\nDesktop Windows (${windows.length} found):\n`)));
+          windows.forEach((w: DesktopWindowInfo) => console.log(`  • ${w.title}${w.processName ? ` (${w.processName})` : ""}`));
+          console.log("");
+        }
+      } else if (action === "focus") {
+        if (!title) {
+          console.error(pc.red("✗ Title argument required for focus action"));
+          await targetManager.closeAll();
+          process.exit(1);
+        }
+        const ok = await target.focusWindow(title);
+        await targetManager.closeAll();
+        if (cmdOpts.json) console.log(JSON.stringify({ status: ok ? "SUCCESS" : "NOT_FOUND", focused: ok, title }));
+        else if (ok) console.log(pc.green(`✓ [OK] Focused window: "${title}"`));
+        else {
+          console.error(pc.red(`✗ [NOT FOUND] Could not find window matching "${title}"`));
+          process.exit(1);
+        }
+      } else {
+        const metrics = await target.getDisplayMetrics();
+        await targetManager.closeAll();
+        if (cmdOpts.json) console.log(JSON.stringify({ status: "SUCCESS", metrics }));
+        else console.log(pc.green(`✓ Display: ${metrics.width}x${metrics.height} (rotation: ${metrics.rotation}°)`));
+      }
+    } else {
+      await targetManager.closeAll();
+      if (cmdOpts.json) console.log(JSON.stringify({ status: "UNSUPPORTED_TARGET", target: target.name }));
+      else console.error(pc.red(`✗ Window management only supported on Desktop target.`));
+      process.exit(1);
+    }
   });
 
 program.parse(process.argv);

@@ -1,23 +1,107 @@
 import { BaseTarget, SemanticElement, ScreenFrame } from "../base.js";
 import { DisplayMetrics } from "../../core/coordinate-mapper.js";
 import { SwipeCoordinates } from "../../core/gesture-engine.js";
+import { logger } from "../../utils/logger.js";
+import { execFile } from "node:child_process";
+import { promisify } from "node:util";
+
+const execFileAsync = promisify(execFile);
+
+export interface DesktopWindowInfo {
+  id?: string;
+  title: string;
+  processName?: string;
+  isActive?: boolean;
+}
 
 export class DesktopTarget extends BaseTarget {
   readonly name = "desktop";
-  override readonly isReady = false;
+  override isReady = false;
   override readonly scaffoldNotice =
-    "Desktop target adapter is planned for v0.2. To use Peep today, run with target: android (ADB / Emulator).";
+    "Desktop target adapter: Window management and display inspection are available. Full native coordinate grounding requires OS accessibility permissions.";
 
   async init(): Promise<void> {
-    throw new Error(this.scaffoldNotice);
+    logger.info("Initializing Desktop target adapter for OS: " + process.platform);
+    this.isReady = true;
   }
 
   async getDisplayMetrics(): Promise<DisplayMetrics> {
+    // Attempt to determine native display resolution
+    if (process.platform === "win32") {
+      try {
+        const { stdout } = await execFileAsync("powershell", [
+          "-NoProfile",
+          "-Command",
+          "Add-Type -AssemblyName System.Windows.Forms; [System.Windows.Forms.Screen]::PrimaryScreen.Bounds | ConvertTo-Json",
+        ]);
+        const bounds = JSON.parse(stdout);
+        return {
+          width: bounds.Width || 1920,
+          height: bounds.Height || 1080,
+          rotation: 0,
+        };
+      } catch {
+        // fallback
+      }
+    }
     return { width: 1920, height: 1080, rotation: 0 };
   }
 
   async captureScreenshot(): Promise<ScreenFrame> {
-    throw new Error("Desktop target not initialized.");
+    throw new Error(
+      "Desktop display capture requires native display capture library or OS screen recording permission."
+    );
+  }
+
+  async listWindows(): Promise<DesktopWindowInfo[]> {
+    if (process.platform === "win32") {
+      try {
+        const cmd = "Get-Process | Where-Object { $_.MainWindowTitle } | Select-Object Id, ProcessName, MainWindowTitle | ConvertTo-Json";
+        const { stdout } = await execFileAsync("powershell", ["-NoProfile", "-Command", cmd]);
+        const parsed = JSON.parse(stdout);
+        const list = Array.isArray(parsed) ? parsed : [parsed];
+        return list.map((w: any) => ({
+          id: String(w.Id),
+          title: w.MainWindowTitle,
+          processName: w.ProcessName,
+        }));
+      } catch {
+        return [];
+      }
+    } else if (process.platform === "darwin") {
+      try {
+        const script = `tell application "System Events" to get name of every window of (every process whose background only is false)`;
+        const { stdout } = await execFileAsync("osascript", ["-e", script]);
+        return stdout
+          .split(",")
+          .map((s) => s.trim())
+          .filter(Boolean)
+          .map((title) => ({ title }));
+      } catch {
+        return [];
+      }
+    }
+    return [];
+  }
+
+  async focusWindow(titleSubstr: string): Promise<boolean> {
+    if (process.platform === "win32") {
+      try {
+        const psScript = `
+$p = Get-Process | Where-Object { $_.MainWindowTitle -like '*${titleSubstr.replace(/'/g, "''")}*' } | Select-Object -First 1
+if ($p) {
+  $wshell = New-Object -ComObject WScript.Shell
+  $wshell.AppActivate($p.Id)
+  Write-Output "OK"
+}
+`;
+        const { stdout } = await execFileAsync("powershell", ["-NoProfile", "-Command", psScript]);
+        return stdout.includes("OK");
+      } catch {
+        return false;
+      }
+    }
+    return false;
   }
 
   async getSemanticHierarchy(): Promise<SemanticElement[]> {

@@ -6,7 +6,7 @@
 [![PRs Welcome](https://img.shields.io/badge/PRs-welcome-orange.svg)](CONTRIBUTING.md)
 
 > **The Open-Source Token Shield for AI Coding Agents.**  
-> Offload visual perception, coordinate grounding, autonomous micro-loops, and noisy log analysis to any local or private model (Ollama, vLLM, llama.cpp, or OpenAI-compatible endpoints)—slashing cloud token expenditure by **95% to 99%** across **Google Antigravity 2.0, Cursor, Claude Code, Windsurf, Cline, and GitHub Copilot**.
+> Offload visual perception, coordinate grounding, autonomous micro-loops, and noisy log analysis to any local or private model (Ollama, vLLM, llama.cpp, or OpenAI-compatible endpoints)—slashing cloud token expenditure by **95% to 99.6%** across **Antigravity 2.0, Cursor, Claude Code, Windsurf, Cline, and GitHub Copilot**.
 
 ---
 
@@ -56,6 +56,20 @@ You are paying for a world-class reasoning model (the equivalent of a **Staff / 
 | **Crash & Exception Diagnosis** | 35,000 tokens ($0.175) | **120 tokens** ($0.0006) | **99.6%** | **99.7%** |
 | **Full Smoke Test Suite (15 screens)** | 36,000 tokens ($0.180) | **260 tokens** ($0.0013) | **99.2%** | **99.3%** |
 | **100 Daily CI/CD Validation Runs** | 4,500,000 tokens/day | **45,000 tokens/day** | **99.0%** | **~$670 / Month Saved** |
+
+---
+
+## 🛑 Strict Engineering Rule: NEVER Call Raw ADB Shell Commands
+
+**Do NOT allow your coding agent to run raw ADB shell commands in bash or powershell.**
+
+### Why Raw ADB Is Forbidden:
+1. **Catastrophic Token Burn**: Running raw `adb logcat -d` dumps 2,000–5,000 lines of Garbage Collection and Choreographer traces directly into context, burning **30,000–75,000 tokens per call**. Peep's `peep_tail_and_filter_logs` filters this noise in-memory and returns a clean 3-line diagnostic (~60 tokens).
+2. **Vision Context Flooding**: Capturing screenshots via `adb exec-out screencap -p` and uploading them into cloud vision models burns **1,600–2,500 tokens per frame**. Peep's Tier 0 accessibility tree (0 tokens) and Tier 2 local VLM keep raw pixels entirely on your local machine.
+3. **Crash Blindness (Silent Failure)**: Raw commands like `adb shell input tap x y` return exit code `0` even if the app has suffered an ANR or `FATAL EXCEPTION`. You will tap blindly on a crash dialog without knowing the app died. Peep's synchronized crash watchdog detects crashes immediately on every interaction.
+4. **App Lifecycle Guesswork**: Commands like `adb shell am start` suffer from activity resolution failures and multi-activity matching conflicts. Peep's `peep_launch_app` auto-resolves launcher activities, checks startup crashes synchronously, and records latency.
+5. **Windows Binary Stream Corruption**: Running `adb exec-out screencap` through Windows PowerShell introduces CRLF translation (`0x0A` -> `0x0D 0x0A`), corrupting PNG headers and causing tool execution failures. Peep uses direct binary streams.
+6. **Security & PII Leaks**: Raw ADB dumps OAuth tokens, session cookies, and user PII into third-party cloud prompt logs. Peep confines raw device introspection to your local machine.
 
 ---
 
@@ -202,34 +216,41 @@ npx peep-mcp doctor
 Peep can be run directly from PowerShell, Bash, Aider, or CI pipelines without an MCP client:
 
 ```bash
-# List all connected Android devices/emulators and connection status
-peep devices
-
-# Run system diagnostics & verify display resolution
+# Verify system diagnostics & display resolution
 peep doctor
+
+# List all connected Android devices/emulators
+peep devices
 
 # Target a specific device (by serial or emulator socket)
 peep -d localhost:7555 tap "Login Button"
 
-# Tap an element using local perception
+# App Lifecycle & State Management
+peep launch com.example.app/.MainActivity
+peep stop com.example.app
+peep clear com.example.app
+peep state
+peep wake
+peep clipboard set "secret_token_123"
+peep deeplink "myapp://checkout"
+peep apps --filter third_party
+
+# Physical Touch & Gestures
 peep tap "Login Button"
-
-# Type text into a field
 peep type "alice@example.com" --target "Email Address"
-
-# Swipe smoothly up/down/left/right
 peep swipe up --distance medium
+peep press back
 
-# Visually verify screen condition using local model
+# Local Visual Assertions (0 cloud tokens burned)
 peep assert "Dashboard welcome header is visible"
 
-# Check logs for crashes (summarized by local model)
+# Log & Crash Investigation (filtered 3-line diagnostic)
 peep logs --crashes
 
-# Run an autonomous local micro-loop
+# Run Autonomous Local Micro-Loops
 peep goal "Dismiss notification popup and open Settings" --max-steps 6
 
-# View total session token & cost savings
+# View Cumulative Token & Cost Telemetry
 peep stats
 
 # Auto-connect to a Wi-Fi debugging device on the fly
@@ -242,8 +263,8 @@ peep tap "Submit" --connect 192.168.1.100:5555
 
 Peep drops into any modern AI coding harness via standard MCP configuration. For each harness below, add the MCP server configuration and run the one-line terminal command to download the skill/rule directly from GitHub:
 
-### 1. Google Antigravity 2.0
-In `~/.gemini/config/mcp_config.json` (or `.gemini/mcp_config.json` in your workspace):
+### 1. Antigravity 2.0
+In `~/.gemini/antigravity/mcp_config.json` (or `%USERPROFILE%\.gemini\antigravity\mcp_config.json` on Windows, or workspace `.agents/mcp_config.json`):
 ```json
 {
   "mcpServers": {
@@ -261,16 +282,25 @@ In `~/.gemini/config/mcp_config.json` (or `.gemini/mcp_config.json` in your work
 ```
 *(Tip: To target a specific emulator like MuMu, add `"PEEP_DEVICE_ID": "localhost:7555"` to `env`. Omit for zero-config auto-detection).*
 
-**Install the `/peep` Slash Command directly from GitHub:**
-- **macOS / Linux**:
-  ```bash
-  mkdir -p ~/.gemini/config/skills/peep && curl -fsSL https://raw.githubusercontent.com/varmakarthik12/peep/main/configs/harnesses/antigravity/SKILL.md -o ~/.gemini/config/skills/peep/SKILL.md
-  ```
-- **Windows (PowerShell)**:
-  ```powershell
-  New-Item -ItemType Directory -Force -Path "$HOME\.gemini\config\skills\peep"; Invoke-WebRequest -Uri "https://raw.githubusercontent.com/varmakarthik12/peep/main/configs/harnesses/antigravity/SKILL.md" -OutFile "$HOME\.gemini\config\skills\peep\SKILL.md"
-  ```
-*(Or install into your project workspace by replacing `$HOME\.gemini\config\skills\peep` with `.agents\skills\peep`)*
+**Install the `/peep` Native Skill directly from GitHub:**
+- **Workspace Level (Recommended — applies to current repository):**
+  - **macOS / Linux**:
+    ```bash
+    mkdir -p .agents/skills/peep && curl -fsSL https://raw.githubusercontent.com/varmakarthik12/peep/main/configs/harnesses/antigravity/SKILL.md -o .agents/skills/peep/SKILL.md
+    ```
+  - **Windows (PowerShell)**:
+    ```powershell
+    New-Item -ItemType Directory -Force -Path ".agents\skills\peep"; Invoke-WebRequest -Uri "https://raw.githubusercontent.com/varmakarthik12/peep/main/configs/harnesses/antigravity/SKILL.md" -OutFile ".agents\skills\peep\SKILL.md"
+    ```
+- **Global User Level (Enables across all workspaces):**
+  - **macOS / Linux**:
+    ```bash
+    mkdir -p ~/.gemini/antigravity/skills/peep && curl -fsSL https://raw.githubusercontent.com/varmakarthik12/peep/main/configs/harnesses/antigravity/SKILL.md -o ~/.gemini/antigravity/skills/peep/SKILL.md
+    ```
+  - **Windows (PowerShell)**:
+    ```powershell
+    New-Item -ItemType Directory -Force -Path "$HOME\.gemini\antigravity\skills\peep"; Invoke-WebRequest -Uri "https://raw.githubusercontent.com/varmakarthik12/peep/main/configs/harnesses/antigravity/SKILL.md" -OutFile "$HOME\.gemini\antigravity\skills\peep\SKILL.md"
+    ```
 
 ---
 
@@ -305,9 +335,9 @@ In `.cursor/mcp.json`:
 ---
 
 ### 3. Claude Desktop & Claude Code CLI
-Add the MCP server via CLI:
+Add the MCP server via Claude CLI:
 ```bash
-claude mcp add peep npx -y peep-mcp serve
+claude mcp add peep -- npx -y peep-mcp serve
 ```
 
 **Install project instructions (`CLAUDE.md`) directly from GitHub:**
@@ -364,7 +394,33 @@ In `mcp_settings.json`:
         "PEEP_PROVIDER_TYPE": "openai",
         "PEEP_BASE_URL": "http://localhost:11434/v1",
         "PEEP_MODEL": "auto"
-      }
+      },
+      "disabled": false,
+      "autoApprove": [
+        "peep_find_and_tap",
+        "peep_type_text",
+        "peep_swipe",
+        "peep_press_key",
+        "peep_assert_screen_state",
+        "peep_tail_and_filter_logs",
+        "peep_execute_goal",
+        "peep_get_telemetry",
+        "peep_launch_app",
+        "peep_install_app",
+        "peep_stop_app",
+        "peep_clear_app_data",
+        "peep_wake_and_unlock",
+        "peep_clipboard",
+        "peep_get_device_state",
+        "peep_open_deep_link",
+        "peep_manage_permissions",
+        "peep_set_screen_orientation",
+        "peep_manage_files",
+        "peep_list_apps",
+        "peep_browser_navigate",
+        "peep_browser_get_distilled_dom",
+        "peep_window_management"
+      ]
     }
   }
 }
@@ -548,18 +604,46 @@ logLevel: "info"              # 'debug', 'info', 'warn', 'error', 'silent'
 
 ---
 
-## 🛠️ Exposed MCP Tools
+## 🛠️ Complete MCP Tools Reference (v0.2.0 — 23 Tools)
 
+### 1. Screen Perception & Interaction
 | MCP Tool Name | Description | Cloud Token Cost |
 | :--- | :--- | :--- |
-| `peep_find_and_tap` | Locates UI element and executes physical tap. | ~50 text tokens (0 vision tokens) |
-| `peep_type_text` | Focuses field and inputs text with proper escaping. | ~40 text tokens |
-| `peep_swipe` | Dispatches calibrated directional swipe gesture. | ~30 text tokens |
-| `peep_press_key` | Hardware/nav key event (`back`, `home`, `enter`). | ~25 text tokens |
-| `peep_assert_screen_state` | Local visual verification of expected condition. | ~60 text tokens (0 vision tokens) |
-| `peep_tail_and_filter_logs` | Noise-filtered logs + local crash diagnosis. | ~60 text tokens (vs 35,000 raw) |
+| `peep_find_and_tap` | Locates UI element (Tier 0 accessibility tree or local VLM) and executes physical tap. | ~50 text tokens (0 vision tokens) |
+| `peep_type_text` | Focuses field and inputs text with proper escaping and optional pre-clear. | ~40 text tokens |
+| `peep_swipe` | Dispatches calibrated directional swipe gesture (`up`, `down`, `left`, `right`). | ~30 text tokens |
+| `peep_press_key` | Hardware/nav key event (`back`, `home`, `enter`, `tab`, `volume_up`, `volume_down`). | ~25 text tokens |
+
+### 2. App Lifecycle & OS Control
+| MCP Tool Name | Description | Cloud Token Cost |
+| :--- | :--- | :--- |
+| `peep_launch_app` | Launches app by package/component with auto-resolved launcher activity and startup crash check. | ~45 text tokens |
+| `peep_stop_app` | Force stops application process cleanly (`am force-stop`). | ~30 text tokens |
+| `peep_clear_app_data` | Clears app user data, databases, and cache to factory state (`pm clear`). | ~35 text tokens |
+| `peep_install_app` | Installs local APK with auto-granted permissions (`-g`), reinstall (`-r`), downgrade (`-d`). | ~40 text tokens |
+| `peep_wake_and_unlock` | Wakes screen and dismisses keyguard/lockscreen (optional PIN). | ~35 text tokens |
+| `peep_get_device_state` | Returns foreground package/activity, display resolution, orientation, and battery metrics. | ~40 text tokens |
+| `peep_set_screen_orientation` | Sets screen orientation to `portrait`, `landscape`, or `auto`. | ~30 text tokens |
+| `peep_open_deep_link` | Dispatches deep link or universal URL intent to target app or browser. | ~35 text tokens |
+| `peep_manage_permissions` | Grants, revokes, or lists runtime Android permissions (`POST_NOTIFICATIONS`, etc.). | ~35 text tokens |
+| `peep_list_apps` | Lists installed packages filtered by `third_party`, `system`, or `all` with search. | ~50 text tokens |
+| `peep_manage_files` | Transfers files between host and device (`push`, `pull`, `delete`) with media scanner broadcast. | ~40 text tokens |
+| `peep_clipboard` | First-class clipboard management (`set`, `get`, `paste`) avoiding shell escaping. | ~30 text tokens |
+
+### 3. Visual Verification, Logs & Telemetry
+| MCP Tool Name | Description | Cloud Token Cost |
+| :--- | :--- | :--- |
+| `peep_assert_screen_state` | Local visual verification of expected condition via local vision model. | ~60 text tokens (0 vision tokens) |
+| `peep_tail_and_filter_logs` | Noise-filtered logs + 3-line local crash diagnosis. | ~60 text tokens (vs 35,000 raw) |
 | `peep_execute_goal` | Autonomous local micro-loop for multi-step tasks. | ~120 text tokens total |
 | `peep_get_telemetry` | Cumulative shielded tokens and estimated USD savings. | ~40 text tokens |
+
+### 4. Multi-Target Extensions (Browser & Desktop)
+| MCP Tool Name | Description | Cloud Token Cost |
+| :--- | :--- | :--- |
+| `peep_browser_navigate` | Navigates Playwright headless Chromium or mobile Chrome to web URL. | ~40 text tokens |
+| `peep_browser_get_distilled_dom` | Extracts accessibility-distilled semantic DOM tree (interactive landmarks and IDs). | ~80 text tokens (vs 15,000 raw HTML) |
+| `peep_window_management` | Desktop OS window management (`list`, `focus`, `get_metrics`). | ~40 text tokens |
 
 ---
 

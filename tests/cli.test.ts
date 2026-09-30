@@ -22,7 +22,7 @@ describe("CLI End-to-End Execution", () => {
 
   it("prints version with -V or --version", async () => {
     const { stdout } = await execFileAsync("node", [CLI_PATH, "--version"]);
-    expect(stdout.trim()).toBe("0.1.0");
+    expect(stdout.trim()).toBe("0.2.0");
   });
 
   it("executes benchmark command and renders token savings comparison table", async () => {
@@ -99,5 +99,26 @@ describe("CLI End-to-End Execution", () => {
       expect(parsed.platform).toBe("desktop");
       expect(parsed.activePlatforms).toEqual(["android"]);
     }
+  });
+
+  it("registers all new v0.2.0 commands in --help", async () => {
+    const { stdout } = await execFileAsync("node", [CLI_PATH, "--help"]);
+
+    expect(stdout).toContain("install");
+    expect(stdout).toContain("deeplink");
+    expect(stdout).toContain("permission");
+    expect(stdout).toContain("orientation");
+    expect(stdout).toContain("file");
+    expect(stdout).toContain("browse");
+    expect(stdout).toContain("dom");
+    expect(stdout).toContain("window");
+  });
+
+  it("prints help for browse and window commands", async () => {
+    const { stdout: browseHelp } = await execFileAsync("node", [CLI_PATH, "browse", "--help"]);
+    expect(browseHelp).toContain("Navigate browser or Android Chrome to URL");
+
+    const { stdout: windowHelp } = await execFileAsync("node", [CLI_PATH, "window", "--help"]);
+    expect(windowHelp).toContain("Desktop window management");
   });
 });

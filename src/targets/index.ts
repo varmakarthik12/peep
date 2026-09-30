@@ -2,6 +2,7 @@ import { BaseTarget } from "./base.js";
 import { AndroidTarget } from "./android/index.js";
 import { BrowserTarget } from "./browser/index.js";
 import { DesktopTarget } from "./desktop/index.js";
+import { IosTarget } from "./ios/index.js";
 import { TargetConfig, LogsConfig, TargetPlatform } from "../config/schema.js";
 import { logger } from "../utils/logger.js";
 
@@ -12,7 +13,7 @@ export class TargetManager {
   constructor(targetConfig: TargetConfig, logsConfig: LogsConfig) {
     this.defaultPlatform = targetConfig.type || targetConfig.defaultPlatform || "android";
 
-    const enabled = targetConfig.enabled || ["android", "browser", "desktop"];
+    const enabled = targetConfig.enabled || ["android", "browser", "desktop", "ios"];
 
     if (enabled.includes("android")) {
       this.targets.set("android", new AndroidTarget(targetConfig, logsConfig));
@@ -22,6 +23,9 @@ export class TargetManager {
     }
     if (enabled.includes("desktop")) {
       this.targets.set("desktop", new DesktopTarget());
+    }
+    if (enabled.includes("ios")) {
+      this.targets.set("ios", new IosTarget(targetConfig.ios));
     }
   }
 
@@ -90,3 +94,4 @@ export * from "./base.js";
 export * from "./android/index.js";
 export * from "./browser/index.js";
 export * from "./desktop/index.js";
+export * from "./ios/index.js";

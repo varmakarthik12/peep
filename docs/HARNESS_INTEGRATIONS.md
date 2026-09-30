@@ -3,17 +3,18 @@
 Peep is designed from the ground up to integrate seamlessly with modern agentic coding harnesses via the **Model Context Protocol (MCP)** or direct terminal execution.
 
 This guide provides copy-paste ready setups for:
-1. [Google Antigravity 2.0](#1-google-antigravity-20)
+1. [Antigravity 2.0](#1-antigravity-20)
 2. [Cursor](#2-cursor)
 3. [Claude Code CLI & Claude Desktop](#3-claude-code-cli--claude-desktop)
 4. [Windsurf Cascade](#4-windsurf-cascade)
 5. [Cline & Roo Code](#5-cline--roo-code)
 6. [GitHub Copilot (VS Code & JetBrains)](#6-github-copilot-vs-code--jetbrains)
-7. [Troubleshooting Common Harness Issues](#7-troubleshooting-common-harness-issues)
+7. [Strict Anti-Raw-ADB Directives](#7-strict-anti-raw-adb-directives)
+8. [Troubleshooting Common Harness Issues](#8-troubleshooting-common-harness-issues)
 
 ---
 
-## 1. Google Antigravity 2.0
+## 1. Antigravity 2.0
 
 Antigravity uses MCP servers defined in your global or project-level configuration, combined with Native Skills (`SKILL.md`) that teach the agent when to invoke the Token Shield.
 
@@ -47,17 +48,7 @@ Add `peep` to your Antigravity MCP configuration.
 ### Step 2: Install Native Skill & /peep Slash Command
 Download and install the native skill directly from GitHub:
 
-**Global User Level (Enables `/peep` slash command across all workspaces):**
-- **macOS / Linux**:
-  ```bash
-  mkdir -p ~/.gemini/config/skills/peep && curl -fsSL https://raw.githubusercontent.com/varmakarthik12/peep/main/configs/harnesses/antigravity/SKILL.md -o ~/.gemini/config/skills/peep/SKILL.md
-  ```
-- **Windows (PowerShell)**:
-  ```powershell
-  New-Item -ItemType Directory -Force -Path "$HOME\.gemini\config\skills\peep"; Invoke-WebRequest -Uri "https://raw.githubusercontent.com/varmakarthik12/peep/main/configs/harnesses/antigravity/SKILL.md" -OutFile "$HOME\.gemini\config\skills\peep\SKILL.md"
-  ```
-
-**Project Workspace Level (Applies to current repository only):**
+**Project Workspace Level (Recommended — applies to current repository):**
 - **macOS / Linux**:
   ```bash
   mkdir -p .agents/skills/peep && curl -fsSL https://raw.githubusercontent.com/varmakarthik12/peep/main/configs/harnesses/antigravity/SKILL.md -o .agents/skills/peep/SKILL.md
@@ -65,6 +56,16 @@ Download and install the native skill directly from GitHub:
 - **Windows (PowerShell)**:
   ```powershell
   New-Item -ItemType Directory -Force -Path ".agents\skills\peep"; Invoke-WebRequest -Uri "https://raw.githubusercontent.com/varmakarthik12/peep/main/configs/harnesses/antigravity/SKILL.md" -OutFile ".agents\skills\peep\SKILL.md"
+  ```
+
+**Global User Level (Enables `/peep` slash command across all workspaces):**
+- **macOS / Linux**:
+  ```bash
+  mkdir -p ~/.gemini/antigravity/skills/peep && curl -fsSL https://raw.githubusercontent.com/varmakarthik12/peep/main/configs/harnesses/antigravity/SKILL.md -o ~/.gemini/antigravity/skills/peep/SKILL.md
+  ```
+- **Windows (PowerShell)**:
+  ```powershell
+  New-Item -ItemType Directory -Force -Path "$HOME\.gemini\antigravity\skills\peep"; Invoke-WebRequest -Uri "https://raw.githubusercontent.com/varmakarthik12/peep/main/configs/harnesses/antigravity/SKILL.md" -OutFile "$HOME\.gemini\antigravity\skills\peep\SKILL.md"
   ```
 
 ### Step 3: Verify in Antigravity
@@ -120,7 +121,7 @@ Cursor will route every step through Peep's calibrated coordinate engine and loc
 
 ## 3. Claude Code CLI & Claude Desktop
 
-Anthropic's Claude Code and Claude Desktop can interact with Peep via MCP stdio.
+Claude Code CLI and Claude Desktop interact with Peep via standard MCP stdio.
 
 ### Claude Code CLI (Recommended)
 Add Peep directly using the Claude CLI:
@@ -235,7 +236,22 @@ Add the following:
         "peep_assert_screen_state",
         "peep_tail_and_filter_logs",
         "peep_execute_goal",
-        "peep_get_telemetry"
+        "peep_get_telemetry",
+        "peep_launch_app",
+        "peep_install_app",
+        "peep_stop_app",
+        "peep_clear_app_data",
+        "peep_wake_and_unlock",
+        "peep_clipboard",
+        "peep_get_device_state",
+        "peep_open_deep_link",
+        "peep_manage_permissions",
+        "peep_set_screen_orientation",
+        "peep_manage_files",
+        "peep_list_apps",
+        "peep_browser_navigate",
+        "peep_browser_get_distilled_dom",
+        "peep_window_management"
       ]
     }
   }
@@ -282,7 +298,20 @@ peep logs --crashes
 
 ---
 
-## 7. Troubleshooting Common Harness Issues
+## 7. Strict Anti-Raw-ADB Directives
+
+All harness instruction files (`SKILL.md`, `.cursor/rules/peep.mdc`, `CLAUDE.md`, `.windsurfrules`, `custom_instructions.md`, `copilot-instructions.md`) explicitly forbid coding agents from executing raw `adb` commands in terminal sessions.
+
+### Why Every Harness Must Enforce Anti-Raw-ADB:
+- **No Logcat Context Flooding**: Raw `adb logcat` floods chat context with 30,000–75,000 tokens of Choreographer and GC noise, quickly causing context saturation and forgetting earlier instructions.
+- **No Heavy Screenshot Uploads**: Raw `adb exec-out screencap` burns 1,600–2,500 vision tokens per frame. Peep resolves elements locally with 0 cloud vision tokens.
+- **Crash Detection Guarantee**: Raw `adb shell input tap` returns status 0 even when an app crashes or freezes. Peep's synchronized watchdog inspects the device synchronously on every tool call.
+- **Reliable App Lifecycle**: `peep_launch_app` auto-resolves package launcher activities and checks startup health, avoiding common intent matching errors.
+- **Windows Binary Stream Safety**: Prevents Windows PowerShell CRLF mangling from corrupting binary PNG screen transfers.
+
+---
+
+## 8. Troubleshooting Common Harness Issues
 
 | Symptom | Probable Cause | One-Line Fix |
 | :--- | :--- | :--- |

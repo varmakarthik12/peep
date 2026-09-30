@@ -1,6 +1,6 @@
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { z } from "zod";
-import { BaseTarget, AndroidTarget, TargetManager } from "../targets/index.js";
+import { BaseTarget, AndroidTarget, BrowserTarget, DesktopTarget, TargetManager } from "../targets/index.js";
 import { BaseInferenceProvider } from "../providers/index.js";
 import { CoordinateMapper } from "../core/coordinate-mapper.js";
 import { GestureEngine, SwipeDirection } from "../core/gesture-engine.js";
@@ -64,7 +64,7 @@ export function registerTools(
         .default("auto")
         .describe("Perception strategy: 'auto' tries UI tree first then falls back to local vision model"),
       context: z.string().optional().describe("Optional contextual hint (e.g. 'in the top right navigation bar')"),
-      platform: z.enum(["android", "browser", "desktop"]).optional().describe("Target platform (defaults to primary active target)"),
+      platform: z.enum(["android", "browser", "desktop", "ios"]).optional().describe("Target platform (defaults to primary active target)"),
     },
     async ({ target: targetDesc, strategy, context, platform }) => {
       logger.info(`[MCP:tap] Target: "${targetDesc}", Strategy: ${strategy}, Platform: ${platform || "default"}`);
@@ -73,37 +73,35 @@ export function registerTools(
 
       // Tier 0/1: Try semantic tree if strategy allows
       if (strategy === "auto" || strategy === "tree_first" || strategy === "tree_only") {
-        if (target instanceof AndroidTarget) {
-          const el = await target.findSemanticElement(targetDesc);
-          if (el) {
-            const centerX = Math.round((el.bounds.left + el.bounds.right) / 2);
-            const centerY = Math.round((el.bounds.top + el.bounds.bottom) / 2);
-            await target.tap(centerX, centerY);
+        const el = await target.findSemanticElement(targetDesc);
+        if (el) {
+          const centerX = Math.round((el.bounds.left + el.bounds.right) / 2);
+          const centerY = Math.round((el.bounds.top + el.bounds.bottom) / 2);
+          await target.tap(centerX, centerY);
 
-            const saved = tokenShield.recordShieldedScreenshot(50);
-            return {
-              content: [
-                {
-                  type: "text",
-                  text: JSON.stringify(
-                    {
-                      status: "SUCCESS",
-                      method: "tier0_semantic_tree",
-                      tappedPoint: [centerX, centerY],
-                      matchedElement: {
-                        text: el.text,
-                        id: el.id,
-                        contentDescription: el.contentDescription,
-                      },
-                      cloudTokensSaved: saved,
+          const saved = tokenShield.recordShieldedScreenshot(50);
+          return {
+            content: [
+              {
+                type: "text",
+                text: JSON.stringify(
+                  {
+                    status: "SUCCESS",
+                    method: "tier0_semantic_tree",
+                    tappedPoint: [centerX, centerY],
+                    matchedElement: {
+                      text: el.text,
+                      id: el.id,
+                      contentDescription: el.contentDescription,
                     },
-                    null,
-                    2
-                  ),
-                },
-              ],
-            };
-          }
+                    cloudTokensSaved: saved,
+                  },
+                  null,
+                  2
+                ),
+              },
+            ],
+          };
         }
 
         if (strategy === "tree_only") {
@@ -188,7 +186,7 @@ export function registerTools(
       text: z.string().describe("Text string to type"),
       target: z.string().optional().describe("Optional target field to tap and focus before typing"),
       clearFirst: z.boolean().default(false).describe("Whether to clear the field first"),
-      platform: z.enum(["android", "browser", "desktop"]).optional().describe("Target platform"),
+      platform: z.enum(["android", "browser", "desktop", "ios"]).optional().describe("Target platform"),
     },
     async ({ text, target: targetDesc, clearFirst, platform }) => {
       logger.info(`[MCP:type] Text: "${text}", Target: ${targetDesc || "(active focus)"}`);
@@ -196,14 +194,12 @@ export function registerTools(
       if (errorResponse) return errorResponse;
 
       if (targetDesc) {
-        if (target instanceof AndroidTarget) {
-          const el = await target.findSemanticElement(targetDesc);
-          if (el) {
-            const cx = Math.round((el.bounds.left + el.bounds.right) / 2);
-            const cy = Math.round((el.bounds.top + el.bounds.bottom) / 2);
-            await target.tap(cx, cy);
-            await new Promise((r) => setTimeout(r, 300));
-          }
+        const el = await target.findSemanticElement(targetDesc);
+        if (el) {
+          const cx = Math.round((el.bounds.left + el.bounds.right) / 2);
+          const cy = Math.round((el.bounds.top + el.bounds.bottom) / 2);
+          await target.tap(cx, cy);
+          await new Promise((r) => setTimeout(r, 300));
         }
       }
 
@@ -237,7 +233,7 @@ export function registerTools(
     {
       direction: z.enum(["up", "down", "left", "right"]).describe("Direction of swipe"),
       distance: z.enum(["short", "medium", "long"]).default("medium").describe("Distance of swipe"),
-      platform: z.enum(["android", "browser", "desktop"]).optional().describe("Target platform"),
+      platform: z.enum(["android", "browser", "desktop", "ios"]).optional().describe("Target platform"),
     },
     async ({ direction, distance, platform }) => {
       logger.info(`[MCP:swipe] Direction: ${direction}, Distance: ${distance}`);
@@ -276,7 +272,7 @@ export function registerTools(
     "Dispatches a hardware or navigation key event (e.g. 'back', 'home', 'enter', 'tab').",
     {
       key: z.string().describe("Key name: 'back', 'home', 'enter', 'tab', 'volume_up', 'volume_down'"),
-      platform: z.enum(["android", "browser", "desktop"]).optional().describe("Target platform"),
+      platform: z.enum(["android", "browser", "desktop", "ios"]).optional().describe("Target platform"),
     },
     async ({ key, platform }) => {
       logger.info(`[MCP:press] Key: ${key}`);
@@ -301,7 +297,7 @@ export function registerTools(
     "Uses local vision model to visually evaluate whether an expected condition is TRUE or FALSE on screen, returning confidence and explanation without cloud token burn.",
     {
       expectedState: z.string().describe("Expected condition to verify (e.g. 'Order confirmation popup is visible', 'Error toast is shown')"),
-      platform: z.enum(["android", "browser", "desktop"]).optional().describe("Target platform"),
+      platform: z.enum(["android", "browser", "desktop", "ios"]).optional().describe("Target platform"),
     },
     async ({ expectedState, platform }) => {
       logger.info(`[MCP:assert] Condition: "${expectedState}"`);
@@ -342,7 +338,7 @@ export function registerTools(
       filterPattern: z.string().optional().describe("Optional substring or regex filter"),
       searchCrashes: z.boolean().default(true).describe("Whether to run local model crash diagnosis"),
       limit: z.number().int().default(100).describe("Max lines to return"),
-      platform: z.enum(["android", "browser", "desktop"]).optional().describe("Target platform"),
+      platform: z.enum(["android", "browser", "desktop", "ios"]).optional().describe("Target platform"),
     },
     async ({ filterPattern, searchCrashes, limit, platform }) => {
       logger.info(`[MCP:logs] Filter: "${filterPattern || "*"}", CrashesOnly: ${searchCrashes}`);
@@ -392,7 +388,7 @@ export function registerTools(
     {
       goal: z.string().describe("High-level task (e.g. 'Dismiss permission dialog and tap on Settings')"),
       maxSteps: z.number().int().default(8).describe("Maximum allowed perception-action iterations"),
-      platform: z.enum(["android", "browser", "desktop"]).optional().describe("Target platform"),
+      platform: z.enum(["android", "browser", "desktop", "ios"]).optional().describe("Target platform"),
     },
     async ({ goal, maxSteps, platform }) => {
       logger.info(`[MCP:goal] Goal: "${goal}" (max ${maxSteps} steps)`);
@@ -427,6 +423,593 @@ export function registerTools(
             text: JSON.stringify(metrics, null, 2),
           },
         ],
+      };
+    }
+  );
+
+  // 9. peep_launch_app
+  server.tool(
+    "peep_launch_app",
+    "Launches an application by package name or component (e.g. 'com.android.chrome' or 'com.example/.MainActivity'). Automatically handles cold/warm start, checks for immediate crashes, and eliminates manual adb am start boilerplate.",
+    {
+      app: z.string().describe("Package name or component, e.g. 'com.android.chrome' or 'com.example/.MainActivity'"),
+      stopExisting: z.boolean().default(true).describe("Force-stop existing process before launching (-S)"),
+      resetState: z.boolean().default(false).describe("Clear app data/cache before launching (cold start)"),
+      waitForLaunch: z.boolean().default(true).describe("Block until initial activity renders (-W)"),
+      extras: z.record(z.union([z.string(), z.number(), z.boolean()])).optional().describe("Intent extras key-value pairs"),
+      platform: z.enum(["android", "browser", "desktop", "ios"]).optional().describe("Target platform"),
+    },
+    async ({ app, stopExisting = true, resetState = false, waitForLaunch = true, extras, platform }) => {
+      logger.info(`[MCP:launch_app] App: ${app}, StopExisting: ${stopExisting}, Reset: ${resetState}`);
+      const { target, errorResponse } = validateTarget(platform as TargetPlatform);
+      if (errorResponse) return errorResponse;
+
+      if (target instanceof AndroidTarget) {
+        const res = await target.launchApp({
+          packageOrComponent: app,
+          stopExisting,
+          resetState,
+          waitForLaunch,
+          extras,
+        });
+        const saved = tokenShield.recordShieldedLogs(40, 50);
+        return {
+          content: [
+            {
+              type: "text",
+              text: JSON.stringify(
+                {
+                  status: res.crashDetected ? "CRASH_DETECTED" : "SUCCESS",
+                  app,
+                  activity: res.activity,
+                  launchState: res.launchState,
+                  totalTimeMs: res.totalTimeMs,
+                  waitTimeMs: res.waitTimeMs,
+                  crashDetected: res.crashDetected,
+                  cloudTokensSaved: saved,
+                },
+                null,
+                2
+              ),
+            },
+          ],
+        };
+      }
+
+      return {
+        content: [{ type: "text", text: JSON.stringify({ status: "UNSUPPORTED_TARGET", target: target.name }) }],
+      };
+    }
+  );
+
+  // 10. peep_install_app
+  server.tool(
+    "peep_install_app",
+    "Installs an APK file onto the target device with automatic runtime permission granting (-g) and reinstall support (-r).",
+    {
+      path: z.string().describe("Local path to the APK file on host machine"),
+      grantPermissions: z.boolean().default(true).describe("Grant all runtime permissions upon installation (-g)"),
+      reinstall: z.boolean().default(true).describe("Reinstall existing application keeping data (-r)"),
+      allowDowngrade: z.boolean().default(false).describe("Allow version code downgrade (-d)"),
+      platform: z.enum(["android", "browser", "desktop", "ios"]).optional().describe("Target platform"),
+    },
+    async ({ path, grantPermissions = true, reinstall = true, allowDowngrade = false, platform }) => {
+      logger.info(`[MCP:install_app] Path: ${path}`);
+      const { target, errorResponse } = validateTarget(platform as TargetPlatform);
+      if (errorResponse) return errorResponse;
+
+      if (target instanceof AndroidTarget) {
+        await target.installApp(path, { grantPermissions, reinstall, allowDowngrade });
+        const saved = tokenShield.recordShieldedLogs(30, 40);
+        return {
+          content: [
+            {
+              type: "text",
+              text: JSON.stringify(
+                {
+                  status: "SUCCESS",
+                  message: `Successfully installed APK: ${path}`,
+                  cloudTokensSaved: saved,
+                },
+                null,
+                2
+              ),
+            },
+          ],
+        };
+      }
+
+      return {
+        content: [{ type: "text", text: JSON.stringify({ status: "UNSUPPORTED_TARGET", target: target.name }) }],
+      };
+    }
+  );
+
+  // 11. peep_stop_app
+  server.tool(
+    "peep_stop_app",
+    "Terminates an application process cleanly or force-stops it.",
+    {
+      app: z.string().describe("Package name to stop (e.g. 'com.android.chrome')"),
+      platform: z.enum(["android", "browser", "desktop", "ios"]).optional().describe("Target platform"),
+    },
+    async ({ app, platform }) => {
+      logger.info(`[MCP:stop_app] App: ${app}`);
+      const { target, errorResponse } = validateTarget(platform as TargetPlatform);
+      if (errorResponse) return errorResponse;
+
+      if (target instanceof AndroidTarget) {
+        await target.stopApp(app);
+        return {
+          content: [
+            {
+              type: "text",
+              text: JSON.stringify({ status: "SUCCESS", message: `Force-stopped ${app}` }, null, 2),
+            },
+          ],
+        };
+      }
+
+      return {
+        content: [{ type: "text", text: JSON.stringify({ status: "UNSUPPORTED_TARGET", target: target.name }) }],
+      };
+    }
+  );
+
+  // 12. peep_clear_app_data
+  server.tool(
+    "peep_clear_app_data",
+    "Clears all user data, databases, and cache for an application (resets to factory state).",
+    {
+      app: z.string().describe("Package name whose data will be cleared"),
+      platform: z.enum(["android", "browser", "desktop", "ios"]).optional().describe("Target platform"),
+    },
+    async ({ app, platform }) => {
+      logger.info(`[MCP:clear_app_data] App: ${app}`);
+      const { target, errorResponse } = validateTarget(platform as TargetPlatform);
+      if (errorResponse) return errorResponse;
+
+      if (target instanceof AndroidTarget) {
+        await target.clearAppData(app);
+        return {
+          content: [
+            {
+              type: "text",
+              text: JSON.stringify({ status: "SUCCESS", message: `Cleared app data for ${app}` }, null, 2),
+            },
+          ],
+        };
+      }
+
+      return {
+        content: [{ type: "text", text: JSON.stringify({ status: "UNSUPPORTED_TARGET", target: target.name }) }],
+      };
+    }
+  );
+
+  // 13. peep_wake_and_unlock
+  server.tool(
+    "peep_wake_and_unlock",
+    "Wakes device screen if asleep, turns display on, and dismisses lockscreen/keyguard.",
+    {
+      pin: z.string().optional().describe("Optional lockscreen PIN or password"),
+      platform: z.enum(["android", "browser", "desktop", "ios"]).optional().describe("Target platform"),
+    },
+    async ({ pin, platform }) => {
+      logger.info(`[MCP:wake_and_unlock]`);
+      const { target, errorResponse } = validateTarget(platform as TargetPlatform);
+      if (errorResponse) return errorResponse;
+
+      if (target instanceof AndroidTarget) {
+        const res = await target.wakeAndUnlock(pin);
+        return {
+          content: [
+            {
+              type: "text",
+              text: JSON.stringify({ status: "SUCCESS", ...res }, null, 2),
+            },
+          ],
+        };
+      }
+
+      return {
+        content: [{ type: "text", text: JSON.stringify({ status: "UNSUPPORTED_TARGET", target: target.name }) }],
+      };
+    }
+  );
+
+  // 14. peep_clipboard
+  server.tool(
+    "peep_clipboard",
+    "Reliable clipboard operations (get, set, paste). Avoids character-by-character shell escaping issues with complex strings, newlines, and emojis.",
+    {
+      action: z.enum(["get", "set", "paste"]).describe("Clipboard action"),
+      text: z.string().optional().describe("Text to set (required for action='set')"),
+      platform: z.enum(["android", "browser", "desktop", "ios"]).optional().describe("Target platform"),
+    },
+    async ({ action, text, platform }) => {
+      logger.info(`[MCP:clipboard] Action: ${action}`);
+      const { target, errorResponse } = validateTarget(platform as TargetPlatform);
+      if (errorResponse) return errorResponse;
+
+      if (target instanceof AndroidTarget) {
+        if (action === "set") {
+          if (text === undefined) throw new Error("text parameter required for clipboard action 'set'");
+          await target.setClipboard(text);
+          return {
+            content: [
+              {
+                type: "text",
+                text: JSON.stringify({ status: "SUCCESS", action: "set", length: text.length }, null, 2),
+              },
+            ],
+          };
+        } else if (action === "get") {
+          const content = await target.getClipboard();
+          return {
+            content: [
+              {
+                type: "text",
+                text: JSON.stringify({ status: "SUCCESS", action: "get", text: content }, null, 2),
+              },
+            ],
+          };
+        } else {
+          await target.pasteClipboard();
+          return {
+            content: [
+              {
+                type: "text",
+                text: JSON.stringify({ status: "SUCCESS", action: "paste" }, null, 2),
+              },
+            ],
+          };
+        }
+      }
+
+      return {
+        content: [{ type: "text", text: JSON.stringify({ status: "UNSUPPORTED_TARGET", target: target.name }) }],
+      };
+    }
+  );
+
+  // 15. peep_get_device_state
+  server.tool(
+    "peep_get_device_state",
+    "Returns current device status: foreground app/activity, screen metrics, orientation, battery percentage, and charging status.",
+    {
+      platform: z.enum(["android", "browser", "desktop", "ios"]).optional().describe("Target platform"),
+    },
+    async ({ platform }) => {
+      logger.info(`[MCP:get_device_state]`);
+      const { target, errorResponse } = validateTarget(platform as TargetPlatform);
+      if (errorResponse) return errorResponse;
+
+      if (target instanceof AndroidTarget) {
+        const state = await target.getDeviceState();
+        return {
+          content: [
+            {
+              type: "text",
+              text: JSON.stringify({ status: "SUCCESS", ...state }, null, 2),
+            },
+          ],
+        };
+      }
+
+      const metrics = await target.getDisplayMetrics();
+      return {
+        content: [
+          {
+            type: "text",
+            text: JSON.stringify({ status: "SUCCESS", platform: target.name, display: metrics }, null, 2),
+          },
+        ],
+      };
+    }
+  );
+
+  // 16. peep_open_deep_link
+  server.tool(
+    "peep_open_deep_link",
+    "Dispatches a deep link or web URI via intent to test URL routing, app schemes, and universal links.",
+    {
+      url: z.string().describe("Deep link URI / URL (e.g. 'https://myapp.com/item/1' or 'myapp://pay')"),
+      app: z.string().optional().describe("Optional package name to target"),
+      platform: z.enum(["android", "browser", "desktop", "ios"]).optional().describe("Target platform"),
+    },
+    async ({ url, app, platform }) => {
+      logger.info(`[MCP:open_deep_link] URL: ${url}, App: ${app || "auto"}`);
+      const { target, errorResponse } = validateTarget(platform as TargetPlatform);
+      if (errorResponse) return errorResponse;
+
+      if (target instanceof AndroidTarget) {
+        const res = await target.openDeepLink(url, app);
+        return {
+          content: [
+            {
+              type: "text",
+              text: JSON.stringify({ status: "SUCCESS", ...res }, null, 2),
+            },
+          ],
+        };
+      }
+
+      return {
+        content: [{ type: "text", text: JSON.stringify({ status: "UNSUPPORTED_TARGET", target: target.name }) }],
+      };
+    }
+  );
+
+  // 17. peep_manage_permissions
+  server.tool(
+    "peep_manage_permissions",
+    "Grants, revokes, or lists runtime Android permissions for an application (e.g. POST_NOTIFICATIONS, CAMERA, RECORD_AUDIO).",
+    {
+      app: z.string().describe("Target package name"),
+      action: z.enum(["grant", "revoke", "list"]).describe("Permission operation"),
+      permission: z.string().optional().describe("Permission name (e.g. 'POST_NOTIFICATIONS' or 'CAMERA')"),
+      platform: z.enum(["android", "browser", "desktop", "ios"]).optional().describe("Target platform"),
+    },
+    async ({ app, action, permission, platform }) => {
+      logger.info(`[MCP:manage_permissions] App: ${app}, Action: ${action}, Permission: ${permission || "*"}`);
+      const { target, errorResponse } = validateTarget(platform as TargetPlatform);
+      if (errorResponse) return errorResponse;
+
+      if (target instanceof AndroidTarget) {
+        const res = await target.managePermissions(action, app, permission);
+        return {
+          content: [
+            {
+              type: "text",
+              text: JSON.stringify({ status: "SUCCESS", app, action, ...res }, null, 2),
+            },
+          ],
+        };
+      }
+
+      return {
+        content: [{ type: "text", text: JSON.stringify({ status: "UNSUPPORTED_TARGET", target: target.name }) }],
+      };
+    }
+  );
+
+  // 18. peep_set_screen_orientation
+  server.tool(
+    "peep_set_screen_orientation",
+    "Sets screen orientation to portrait, landscape, or auto-rotation mode.",
+    {
+      orientation: z.enum(["portrait", "landscape", "auto"]).describe("Screen orientation"),
+      platform: z.enum(["android", "browser", "desktop", "ios"]).optional().describe("Target platform"),
+    },
+    async ({ orientation, platform }) => {
+      logger.info(`[MCP:orientation] Setting orientation to: ${orientation}`);
+      const { target, errorResponse } = validateTarget(platform as TargetPlatform);
+      if (errorResponse) return errorResponse;
+
+      if (target instanceof AndroidTarget) {
+        await target.setScreenOrientation(orientation);
+        return {
+          content: [
+            {
+              type: "text",
+              text: JSON.stringify({ status: "SUCCESS", orientation }, null, 2),
+            },
+          ],
+        };
+      }
+
+      return {
+        content: [{ type: "text", text: JSON.stringify({ status: "UNSUPPORTED_TARGET", target: target.name }) }],
+      };
+    }
+  );
+
+  // 19. peep_manage_files
+  server.tool(
+    "peep_manage_files",
+    "Transfers files between host and device or deletes files on device (push, pull, delete).",
+    {
+      action: z.enum(["push", "pull", "delete"]).describe("File operation"),
+      devicePath: z.string().describe("Target file path on device"),
+      hostPath: z.string().optional().describe("Source or destination path on host"),
+      triggerMediaScan: z.boolean().default(true).describe("Trigger media scanner after file push"),
+      platform: z.enum(["android", "browser", "desktop", "ios"]).optional().describe("Target platform"),
+    },
+    async ({ action, devicePath, hostPath, triggerMediaScan = true, platform }) => {
+      logger.info(`[MCP:files] Action: ${action}, DevicePath: ${devicePath}`);
+      const { target, errorResponse } = validateTarget(platform as TargetPlatform);
+      if (errorResponse) return errorResponse;
+
+      if (target instanceof AndroidTarget) {
+        const res = await target.manageFiles(action, devicePath, hostPath, triggerMediaScan);
+        return {
+          content: [
+            {
+              type: "text",
+              text: JSON.stringify({ status: "SUCCESS", ...res }, null, 2),
+            },
+          ],
+        };
+      }
+
+      return {
+        content: [{ type: "text", text: JSON.stringify({ status: "UNSUPPORTED_TARGET", target: target.name }) }],
+      };
+    }
+  );
+
+  // 20. peep_list_apps
+  server.tool(
+    "peep_list_apps",
+    "Lists installed packages on device with optional substring filtering.",
+    {
+      filter: z.enum(["third_party", "system", "all"]).default("third_party").describe("Filter package type"),
+      search: z.string().optional().describe("Search substring"),
+      limit: z.number().int().default(30).describe("Max packages to return"),
+      platform: z.enum(["android", "browser", "desktop", "ios"]).optional().describe("Target platform"),
+    },
+    async ({ filter, search, limit, platform }) => {
+      logger.info(`[MCP:list_apps] Filter: ${filter}, Search: ${search || "*"}`);
+      const { target, errorResponse } = validateTarget(platform as TargetPlatform);
+      if (errorResponse) return errorResponse;
+
+      if (target instanceof AndroidTarget) {
+        const apps = await target.listApps(filter, search, limit);
+        return {
+          content: [
+            {
+              type: "text",
+              text: JSON.stringify({ status: "SUCCESS", count: apps.length, apps }, null, 2),
+            },
+          ],
+        };
+      }
+
+      return {
+        content: [{ type: "text", text: JSON.stringify({ status: "UNSUPPORTED_TARGET", target: target.name }) }],
+      };
+    }
+  );
+
+  // 21. peep_browser_navigate
+  server.tool(
+    "peep_browser_navigate",
+    "Navigates the browser target (or Android Chrome browser) to a given URL with optional wait for DOM content loaded.",
+    {
+      url: z.string().describe("Web page URL to navigate to"),
+      waitForLoad: z.boolean().default(true).describe("Wait for DOM content loaded"),
+      timeoutMs: z.number().int().default(30000).describe("Navigation timeout in milliseconds"),
+      platform: z.enum(["android", "browser", "desktop", "ios"]).default("browser").optional().describe("Target platform"),
+    },
+    async ({ url, waitForLoad, timeoutMs, platform }) => {
+      logger.info(`[MCP:browser_navigate] URL: ${url}`);
+      const selected = platform || "browser";
+      const target = getTarget(selected as TargetPlatform);
+
+      if (target instanceof BrowserTarget) {
+        const res = await target.navigate(url, waitForLoad, timeoutMs);
+        return {
+          content: [
+            {
+              type: "text",
+              text: JSON.stringify({ status: "SUCCESS", httpStatus: res.status, url: res.url, title: res.title }, null, 2),
+            },
+          ],
+        };
+      }
+
+      if (target instanceof AndroidTarget) {
+        const res = await target.openDeepLink(url, "com.android.chrome");
+        return {
+          content: [
+            {
+              type: "text",
+              text: JSON.stringify({ status: "SUCCESS", method: "android_chrome_intent", ...res }, null, 2),
+            },
+          ],
+        };
+      }
+
+      return {
+        content: [{ type: "text", text: JSON.stringify({ status: "UNSUPPORTED_TARGET", target: target.name }) }],
+      };
+    }
+  );
+
+  // 22. peep_browser_get_distilled_dom
+  server.tool(
+    "peep_browser_get_distilled_dom",
+    "Extracts a distilled accessibility/DOM representation containing only interactive landmarks and actionable elements with reference IDs, shielding 95%+ of raw DOM/HTML tokens.",
+    {
+      selector: z.string().default("body").describe("Root element selector"),
+      maxDepth: z.number().int().default(5).describe("Maximum tree depth"),
+      platform: z.enum(["android", "browser", "desktop", "ios"]).default("browser").optional().describe("Target platform"),
+    },
+    async ({ selector, maxDepth, platform }) => {
+      logger.info(`[MCP:distilled_dom] Selector: ${selector}`);
+      const selected = platform || "browser";
+      const target = getTarget(selected as TargetPlatform);
+
+      if (target instanceof BrowserTarget) {
+        const elements = await target.getDistilledDom(selector, maxDepth);
+        const saved = tokenShield.recordShieldedScreenshot(50);
+        return {
+          content: [
+            {
+              type: "text",
+              text: JSON.stringify(
+                {
+                  status: "SUCCESS",
+                  count: elements.length,
+                  elements,
+                  cloudTokensSaved: saved,
+                },
+                null,
+                2
+              ),
+            },
+          ],
+        };
+      }
+
+      return {
+        content: [{ type: "text", text: JSON.stringify({ status: "UNSUPPORTED_TARGET", target: target.name }) }],
+      };
+    }
+  );
+
+  // 23. peep_window_management
+  server.tool(
+    "peep_window_management",
+    "Desktop window control: list open application windows, focus a specific window by title, or inspect display bounds.",
+    {
+      action: z.enum(["list", "focus", "get_metrics"]).describe("Action to perform"),
+      title: z.string().optional().describe("Window title filter for focus action"),
+      platform: z.enum(["android", "browser", "desktop", "ios"]).default("desktop").optional().describe("Target platform"),
+    },
+    async ({ action, title, platform }) => {
+      logger.info(`[MCP:window_mgmt] Action: ${action}, Title: ${title || "*"}`);
+      const selected = platform || "desktop";
+      const target = getTarget(selected as TargetPlatform);
+
+      if (target instanceof DesktopTarget) {
+        if (action === "list") {
+          const windows = await target.listWindows();
+          return {
+            content: [
+              {
+                type: "text",
+                text: JSON.stringify({ status: "SUCCESS", count: windows.length, windows }, null, 2),
+              },
+            ],
+          };
+        } else if (action === "focus") {
+          if (!title) throw new Error("title parameter required for focus action");
+          const ok = await target.focusWindow(title);
+          return {
+            content: [
+              {
+                type: "text",
+                text: JSON.stringify({ status: ok ? "SUCCESS" : "NOT_FOUND", focused: ok, title }, null, 2),
+              },
+            ],
+          };
+        } else {
+          const metrics = await target.getDisplayMetrics();
+          return {
+            content: [
+              {
+                type: "text",
+                text: JSON.stringify({ status: "SUCCESS", metrics }, null, 2),
+              },
+            ],
+          };
+        }
+      }
+
+      return {
+        content: [{ type: "text", text: JSON.stringify({ status: "UNSUPPORTED_TARGET", target: target.name }) }],
       };
     }
   );

@@ -17,7 +17,22 @@
         "peep_assert_screen_state",
         "peep_tail_and_filter_logs",
         "peep_execute_goal",
-        "peep_get_telemetry"
+        "peep_get_telemetry",
+        "peep_launch_app",
+        "peep_install_app",
+        "peep_stop_app",
+        "peep_clear_app_data",
+        "peep_wake_and_unlock",
+        "peep_clipboard",
+        "peep_get_device_state",
+        "peep_open_deep_link",
+        "peep_manage_permissions",
+        "peep_set_screen_orientation",
+        "peep_manage_files",
+        "peep_list_apps",
+        "peep_browser_navigate",
+        "peep_browser_get_distilled_dom",
+        "peep_window_management"
       ]
     }
   }

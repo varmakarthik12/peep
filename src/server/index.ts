@@ -12,7 +12,7 @@ export async function startMcpServer(config: PeepConfig): Promise<void> {
 
   const server = new McpServer({
     name: "peep",
-    version: "0.1.0",
+    version: "0.2.0",
   });
 
   const provider = createProvider(config.provider);
@@ -50,4 +50,5 @@ export async function startMcpServer(config: PeepConfig): Promise<void> {
 
   process.on("SIGINT", shutdown);
   process.on("SIGTERM", shutdown);
+  process.stdin.on("close", shutdown);
 }

@@ -106,6 +106,7 @@ export class UiHierarchyParser {
   async findElement(query: string): Promise<SemanticElement | null> {
     const elements = await this.dumpHierarchy();
     const q = query.toLowerCase().trim();
+    if (!q) return null;
 
     // 1. Exact matches
     for (const el of elements) {

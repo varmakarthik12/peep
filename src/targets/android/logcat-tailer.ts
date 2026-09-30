@@ -51,10 +51,8 @@ export class LogcatTailer {
     }
     await this.adb.autoSelectDevice();
 
-    const deviceId = this.adb.getDeviceId();
-    const args = deviceId
-      ? ["-s", deviceId, "logcat", "-v", "time"]
-      : ["logcat", "-v", "time"];
+    const baseArgs = typeof this.adb.getBaseArgs === "function" ? this.adb.getBaseArgs() : [];
+    const args = [...baseArgs, "logcat", "-v", "time"];
 
     // Clear old logcat before tailing
     try {
@@ -89,13 +87,16 @@ export class LogcatTailer {
     const trimmed = line.trim();
     if (!trimmed) return;
 
-    // Check crash patterns for watchdog
-    for (const pattern of CRASH_PATTERNS) {
-      if (pattern.test(trimmed)) {
-        this.hasCrashed = true;
-        this.crashReason = trimmed;
-        logger.warn(`[Watchdog] Crash detected: ${trimmed}`);
-        break;
+    // Check crash patterns for watchdog (ignore non-fatal V/D/I/W levels unless explicitly FATAL or died)
+    const isNonFatalLevel = /(?:^|\s)[VDIW]\/\S+/.test(trimmed);
+    if (!isNonFatalLevel || /FATAL|died/i.test(trimmed)) {
+      for (const pattern of CRASH_PATTERNS) {
+        if (pattern.test(trimmed)) {
+          this.hasCrashed = true;
+          this.crashReason = trimmed;
+          logger.warn(`[Watchdog] Crash detected: ${trimmed}`);
+          break;
+        }
       }
     }
 
@@ -117,8 +118,13 @@ export class LogcatTailer {
     let logs = this.ringBuffer;
 
     if (filterPattern) {
-      const regex = new RegExp(filterPattern, "i");
-      logs = logs.filter((l) => regex.test(l));
+      try {
+        const regex = new RegExp(filterPattern, "i");
+        logs = logs.filter((l) => regex.test(l));
+      } catch {
+        const lower = filterPattern.toLowerCase();
+        logs = logs.filter((l) => l.toLowerCase().includes(lower));
+      }
     }
 
     return logs.slice(-limit);

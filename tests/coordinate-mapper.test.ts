@@ -212,4 +212,128 @@ describe("CoordinateMapper", () => {
       expect(normOrigin.y).toBe(0);
     });
   });
+
+  describe("getEffectiveDimensions and rotation metrics", () => {
+    it("returns unrotated dimensions for 0 and 180 degrees", () => {
+      const mapper0 = new CoordinateMapper({ width: 1080, height: 2400, rotation: 0 });
+      expect(mapper0.getEffectiveDimensions()).toEqual({ width: 1080, height: 2400 });
+
+      const mapper180 = new CoordinateMapper({ width: 1080, height: 2400, rotation: 180 });
+      expect(mapper180.getEffectiveDimensions()).toEqual({ width: 1080, height: 2400 });
+    });
+
+    it("swaps dimensions for 90 and 270 degrees in portrait base metrics", () => {
+      const mapper90 = new CoordinateMapper({ width: 1080, height: 2400, rotation: 90 });
+      expect(mapper90.getEffectiveDimensions()).toEqual({ width: 2400, height: 1080 });
+
+      const mapper270 = new CoordinateMapper({ width: 1080, height: 2400, rotation: 270 });
+      expect(mapper270.getEffectiveDimensions()).toEqual({ width: 2400, height: 1080 });
+    });
+
+    it("handles 90 degrees when base metrics are already landscape", () => {
+      const mapperLandscape = new CoordinateMapper({ width: 2400, height: 1080, rotation: 90 });
+      expect(mapperLandscape.getEffectiveDimensions()).toEqual({ width: 2400, height: 1080 });
+    });
+
+    it("defaults rotation to 0 if not provided in metrics", () => {
+      const mapper = new CoordinateMapper({ width: 1080, height: 1920 });
+      expect(mapper.getMetrics().rotation).toBe(0);
+      expect(mapper.getEffectiveDimensions()).toEqual({ width: 1080, height: 1920 });
+    });
+  });
+
+  describe("Letterboxing math edge cases", () => {
+    it("clamps normalized coordinates inside horizontal black bars (outside active area)", () => {
+      // Device: 1000x2000 (aspect 0.5), Frame: 1200x1200 (aspect 1.0)
+      // activeWidth = 600, padX = 300
+      // Left bar spans rawPx [0, 300) -> normX in [0, 250)
+      // Right bar spans rawPx (900, 1200] -> normX in (750, 1000]
+      const mapper = new CoordinateMapper({ width: 1000, height: 2000 });
+
+      // Click well inside left black bar (normX = 50 -> rawPx = 60)
+      const leftBarClick = mapper.toPhysicalPoint(
+        { x: 50, y: 500 },
+        { frameWidth: 1200, frameHeight: 1200 }
+      );
+      expect(leftBarClick.x).toBe(0); // Clamped to 0
+      expect(leftBarClick.y).toBe(1000);
+
+      // Click well inside right black bar (normX = 950 -> rawPx = 1140)
+      const rightBarClick = mapper.toPhysicalPoint(
+        { x: 950, y: 500 },
+        { frameWidth: 1200, frameHeight: 1200 }
+      );
+      expect(rightBarClick.x).toBe(1000); // Clamped to max physical width
+      expect(rightBarClick.y).toBe(1000);
+    });
+
+    it("clamps normalized coordinates inside vertical black bars (outside active area)", () => {
+      // Device: 1200x600 (aspect 2.0), Frame: 1000x1000 (aspect 1.0)
+      // activeHeight = 500, padY = 250
+      // Top bar spans rawPy [0, 250) -> normY in [0, 250)
+      // Bottom bar spans rawPy (750, 1000] -> normY in (750, 1000]
+      const mapper = new CoordinateMapper({ width: 1200, height: 600 });
+
+      // Click well inside top black bar (normY = 50 -> rawPy = 50)
+      const topBarClick = mapper.toPhysicalPoint(
+        { x: 500, y: 50 },
+        { frameWidth: 1000, frameHeight: 1000 }
+      );
+      expect(topBarClick.x).toBe(600);
+      expect(topBarClick.y).toBe(0); // Clamped to top
+
+      // Click well inside bottom black bar (normY = 950 -> rawPy = 950)
+      const bottomBarClick = mapper.toPhysicalPoint(
+        { x: 500, y: 950 },
+        { frameWidth: 1000, frameHeight: 1000 }
+      );
+      expect(bottomBarClick.x).toBe(600);
+      expect(bottomBarClick.y).toBe(600); // Clamped to bottom
+    });
+
+    it("bypasses letterbox adjustment safely if frame dimensions are zero or negative", () => {
+      const mapper = new CoordinateMapper({ width: 1080, height: 2400 });
+
+      const resZero = mapper.toPhysicalPoint({ x: 500, y: 500 }, { frameWidth: 0, frameHeight: 0 });
+      expect(resZero.x).toBe(540);
+      expect(resZero.y).toBe(1200);
+
+      const resNegative = mapper.toPhysicalPoint({ x: 500, y: 500 }, { frameWidth: -500, frameHeight: -500 });
+      expect(resNegative.x).toBe(540);
+      expect(resNegative.y).toBe(1200);
+    });
+
+    it("handles inverted and out-of-bounds bounding boxes", () => {
+      const mapper = new CoordinateMapper({ width: 1000, height: 2000 });
+
+      // Inverted bounding box (left > right, top > bottom)
+      const invertedBox = mapper.boundingBoxToCenter({
+        left: 800,
+        top: 900,
+        right: 200,
+        bottom: 100,
+      });
+      // Center: (800+200)/2 = 500 -> 500, (900+100)/2 = 500 -> 1000
+      expect(invertedBox.x).toBe(500);
+      expect(invertedBox.y).toBe(1000);
+
+      // Out of bounds box on negative side
+      const negativeBox = mapper.boundingBoxToCenter({
+        left: -300,
+        top: -200,
+        right: -100,
+        bottom: -50,
+      });
+      expect(negativeBox.x).toBe(0);
+      expect(negativeBox.y).toBe(0);
+
+      // Bounding box with letterboxing options passed through
+      const letterboxedBox = mapper.boundingBoxToCenter(
+        { left: 450, top: 450, right: 550, bottom: 550 },
+        { frameWidth: 1200, frameHeight: 1200 }
+      );
+      expect(letterboxedBox.x).toBe(500);
+      expect(letterboxedBox.y).toBe(1000);
+    });
+  });
 });

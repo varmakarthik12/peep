@@ -24,7 +24,7 @@ export interface ScreenFrame {
 
 export abstract class BaseTarget {
   abstract readonly name: string;
-  readonly isReady: boolean = true;
+  isReady: boolean = true;
   readonly scaffoldNotice?: string;
 
   abstract init(): Promise<void>;
@@ -37,5 +37,19 @@ export abstract class BaseTarget {
   abstract pressKey(key: string): Promise<void>;
   abstract getRecentLogs(filter?: string): Promise<string[]>;
   abstract checkCrashWatchdog(): Promise<{ hasCrashed: boolean; reason?: string }>;
+  resetCrashWatchdog?(): void;
   abstract close(): Promise<void>;
+
+  async findSemanticElement(query: string): Promise<SemanticElement | null> {
+    const elements = await this.getSemanticHierarchy();
+    const q = query.toLowerCase().trim();
+    return (
+      elements.find((el) => {
+        if (el.text && el.text.toLowerCase().includes(q)) return true;
+        if (el.contentDescription && el.contentDescription.toLowerCase().includes(q)) return true;
+        if (el.id && el.id.toLowerCase().includes(q)) return true;
+        return false;
+      }) || null
+    );
+  }
 }

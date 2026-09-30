@@ -56,19 +56,28 @@ export const DesktopTargetConfigSchema = z.object({
   displayIndex: z.number().int().default(0),
 });
 
-export const TargetPlatformEnum = z.enum(["android", "browser", "desktop"]);
+export const IosTargetConfigSchema = z.object({
+  udid: z.string().optional(),
+  deviceType: z.enum(["simulator", "physical"]).default("simulator"),
+  wdaPort: z.number().int().positive().default(8100),
+  simctlPath: z.string().default("xcrun"),
+  goIosPath: z.string().default("ios"),
+});
+
+export const TargetPlatformEnum = z.enum(["android", "browser", "desktop", "ios"]);
 export type TargetPlatform = z.infer<typeof TargetPlatformEnum>;
 
 export const TargetConfigSchema = z.object({
   // Enabled targets - default to ALL enabled simultaneously
   enabled: z
     .array(TargetPlatformEnum)
-    .default(["android", "browser", "desktop"]),
+    .default(["android", "browser", "desktop", "ios"]),
   defaultPlatform: TargetPlatformEnum.default("android"),
   type: TargetPlatformEnum.default("android"),
   android: AndroidTargetConfigSchema.default({}),
   browser: BrowserTargetConfigSchema.default({}),
   desktop: DesktopTargetConfigSchema.default({}),
+  ios: IosTargetConfigSchema.default({}),
   // Top-level aliases for backward compatibility
   deviceId: z.string().optional(),
   adbPath: z.string().optional(),
@@ -108,5 +117,6 @@ export type TargetConfig = z.infer<typeof TargetConfigSchema>;
 export type AndroidTargetConfig = z.infer<typeof AndroidTargetConfigSchema>;
 export type BrowserTargetConfig = z.infer<typeof BrowserTargetConfigSchema>;
 export type DesktopTargetConfig = z.infer<typeof DesktopTargetConfigSchema>;
+export type IosTargetConfig = z.infer<typeof IosTargetConfigSchema>;
 export type PerceptionConfig = z.infer<typeof PerceptionConfigSchema>;
 export type LogsConfig = z.infer<typeof LogsConfigSchema>;
