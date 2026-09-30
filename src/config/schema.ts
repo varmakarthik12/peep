@@ -74,10 +74,10 @@ export const TargetConfigSchema = z.object({
     .default(["android", "browser", "desktop", "ios"]),
   defaultPlatform: TargetPlatformEnum.default("android"),
   type: TargetPlatformEnum.default("android"),
-  android: AndroidTargetConfigSchema.default({}),
-  browser: BrowserTargetConfigSchema.default({}),
-  desktop: DesktopTargetConfigSchema.default({}),
-  ios: IosTargetConfigSchema.default({}),
+  android: AndroidTargetConfigSchema.prefault({}),
+  browser: BrowserTargetConfigSchema.prefault({}),
+  desktop: DesktopTargetConfigSchema.prefault({}),
+  ios: IosTargetConfigSchema.prefault({}),
   // Top-level aliases for backward compatibility
   deviceId: z.string().optional(),
   adbPath: z.string().optional(),
@@ -100,10 +100,10 @@ export const LogsConfigSchema = z.object({
 });
 
 export const PeepConfigSchema = z.object({
-  provider: InferenceProviderConfigSchema.default({}),
-  target: TargetConfigSchema.default({}),
-  perception: PerceptionConfigSchema.default({}),
-  logs: LogsConfigSchema.default({}),
+  provider: InferenceProviderConfigSchema.prefault({}),
+  target: TargetConfigSchema.prefault({}),
+  perception: PerceptionConfigSchema.prefault({}),
+  logs: LogsConfigSchema.prefault({}),
   logLevel: z
     .enum(["debug", "info", "warn", "error", "silent"])
     .default("info"),

@@ -436,7 +436,7 @@ export function registerTools(
       stopExisting: z.boolean().default(true).describe("Force-stop existing process before launching (-S)"),
       resetState: z.boolean().default(false).describe("Clear app data/cache before launching (cold start)"),
       waitForLaunch: z.boolean().default(true).describe("Block until initial activity renders (-W)"),
-      extras: z.record(z.union([z.string(), z.number(), z.boolean()])).optional().describe("Intent extras key-value pairs"),
+      extras: z.record(z.string(), z.union([z.string(), z.number(), z.boolean()])).optional().describe("Intent extras key-value pairs"),
       platform: z.enum(["android", "browser", "desktop", "ios"]).optional().describe("Target platform"),
     },
     async ({ app, stopExisting = true, resetState = false, waitForLaunch = true, extras, platform }) => {
@@ -450,7 +450,7 @@ export function registerTools(
           stopExisting,
           resetState,
           waitForLaunch,
-          extras,
+          extras: extras as Record<string, string | number | boolean> | undefined,
         });
         const saved = tokenShield.recordShieldedLogs(40, 50);
         return {
@@ -1056,7 +1056,7 @@ export function registerTools(
       useRootKill: z.boolean().default(false).describe("Use root kill before relaunch to ensure all detached native workers and hooks are completely dead"),
       resetState: z.boolean().default(false).describe("Wipe app data/cache before relaunching (cold start)"),
       waitForLaunch: z.boolean().default(true).describe("Block until initial activity renders"),
-      extras: z.record(z.union([z.string(), z.number(), z.boolean()])).optional().describe("Intent extras key-value pairs"),
+      extras: z.record(z.string(), z.union([z.string(), z.number(), z.boolean()])).optional().describe("Intent extras key-value pairs"),
       platform: z.enum(["android", "browser", "desktop", "ios"]).optional().describe("Target platform"),
     },
     async ({ app, useRootKill = false, resetState = false, waitForLaunch = true, extras, platform }) => {
@@ -1070,7 +1070,7 @@ export function registerTools(
           useRootKill,
           resetState,
           waitForLaunch,
-          extras,
+          extras: extras as Record<string, string | number | boolean> | undefined,
         });
         const saved = tokenShield.recordShieldedLogs(40, 50);
         return {
