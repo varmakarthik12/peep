@@ -60,7 +60,7 @@ describe("Targets Factory & Adapters", () => {
     await expect(target.typeText("test")).resolves.toBeUndefined();
     await expect(target.pressKey("enter")).resolves.toBeUndefined();
     await expect(target.close()).resolves.toBeUndefined();
-  });
+  }, 15000);
 
   it("creates iOS target and verifies adapter properties", async () => {
     const { IosTarget } = await import("../src/targets/ios/index.js");

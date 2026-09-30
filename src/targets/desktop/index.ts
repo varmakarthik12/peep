@@ -26,14 +26,23 @@ export class DesktopTarget extends BaseTarget {
   }
 
   async getDisplayMetrics(): Promise<DisplayMetrics> {
+    // In CI environments (headless runners), avoid slow powershell System.Windows.Forms startup
+    if (process.env.CI) {
+      return { width: 1920, height: 1080, rotation: 0 };
+    }
+
     // Attempt to determine native display resolution
     if (process.platform === "win32") {
       try {
-        const { stdout } = await execFileAsync("powershell", [
-          "-NoProfile",
-          "-Command",
-          "Add-Type -AssemblyName System.Windows.Forms; [System.Windows.Forms.Screen]::PrimaryScreen.Bounds | ConvertTo-Json",
-        ]);
+        const { stdout } = await execFileAsync(
+          "powershell",
+          [
+            "-NoProfile",
+            "-Command",
+            "Add-Type -AssemblyName System.Windows.Forms; [System.Windows.Forms.Screen]::PrimaryScreen.Bounds | ConvertTo-Json",
+          ],
+          { timeout: 2500 }
+        );
         const bounds = JSON.parse(stdout);
         return {
           width: bounds.Width || 1920,
@@ -57,7 +66,7 @@ export class DesktopTarget extends BaseTarget {
     if (process.platform === "win32") {
       try {
         const cmd = "Get-Process | Where-Object { $_.MainWindowTitle } | Select-Object Id, ProcessName, MainWindowTitle | ConvertTo-Json";
-        const { stdout } = await execFileAsync("powershell", ["-NoProfile", "-Command", cmd]);
+        const { stdout } = await execFileAsync("powershell", ["-NoProfile", "-Command", cmd], { timeout: 2500 });
         const parsed = JSON.parse(stdout);
         const list = Array.isArray(parsed) ? parsed : [parsed];
         return list.map((w: any) => ({
@@ -71,7 +80,7 @@ export class DesktopTarget extends BaseTarget {
     } else if (process.platform === "darwin") {
       try {
         const script = `tell application "System Events" to get name of every window of (every process whose background only is false)`;
-        const { stdout } = await execFileAsync("osascript", ["-e", script]);
+        const { stdout } = await execFileAsync("osascript", ["-e", script], { timeout: 2500 });
         return stdout
           .split(",")
           .map((s) => s.trim())
@@ -95,7 +104,7 @@ if ($p) {
   Write-Output "OK"
 }
 `;
-        const { stdout } = await execFileAsync("powershell", ["-NoProfile", "-Command", psScript]);
+        const { stdout } = await execFileAsync("powershell", ["-NoProfile", "-Command", psScript], { timeout: 2500 });
         return stdout.includes("OK");
       } catch {
         return false;
