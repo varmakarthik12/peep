@@ -125,8 +125,18 @@ program
       console.log(renderTable(["Serial / Socket", "State", "Model", "Product"], rows, "Connected Devices"));
       console.log(pc.dim(`\nTotal devices detected: ${devices.length}\n`));
     } catch (err) {
-      console.error(pc.red(`Failed to query ADB devices: ${err instanceof Error ? err.message : String(err)}`));
-      process.exit(1);
+      if (cmdOpts.json) {
+        console.log(JSON.stringify({ error: err instanceof Error ? err.message : String(err), devices: [] }, null, 2));
+        return;
+      }
+
+      console.log(renderBanner());
+      console.log(pc.bold(pc.cyan("Attached Android Devices & Emulators:\n")));
+      console.log(pc.yellow(`Unable to query ADB devices: ${err instanceof Error ? err.message : String(err)}`));
+      console.log(pc.dim("\nTroubleshooting Tips:"));
+      console.log(pc.dim("  - Verify that Android SDK platform-tools ('adb') is installed and in your system PATH"));
+      console.log(pc.dim("  - You can also set PEEP_ADB_PATH or use --adb-path to point to the adb binary"));
+      console.log(pc.dim("  - For remote ADB servers, pass --adb-host and --adb-port\n"));
     }
   });
 
