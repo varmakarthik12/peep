@@ -1013,4 +1013,306 @@ export function registerTools(
       };
     }
   );
+
+  // 24. peep_force_stop_process
+  server.tool(
+    "peep_force_stop_process",
+    "Exterminates an application, stubborn background daemon, or process by package name, process name, or numeric PID. Supports root execution (kill -9 via su/root adbd) to eliminate persistent services, zygote-injected processes, and detached daemons that standard am force-stop cannot terminate.",
+    {
+      target: z.string().describe("Package name, process name pattern, or numeric PID to terminate"),
+      useRoot: z.boolean().default(false).describe("Use root privileges (kill -9) to exterminate persistent services or root daemons"),
+      killAllMatching: z.boolean().default(true).describe("Kill all detached child processes or daemons matching the process name"),
+      platform: z.enum(["android", "browser", "desktop", "ios"]).optional().describe("Target platform"),
+    },
+    async ({ target: targetArg, useRoot = false, killAllMatching = true, platform }) => {
+      logger.info(`[MCP:force_stop_process] Target: ${targetArg}, Root: ${useRoot}, KillMatching: ${killAllMatching}`);
+      const { target, errorResponse } = validateTarget(platform as TargetPlatform);
+      if (errorResponse) return errorResponse;
+
+      if (target instanceof AndroidTarget) {
+        const res = await target.forceStopProcess(targetArg, { useRoot, killAllMatching });
+        return {
+          content: [
+            {
+              type: "text",
+              text: JSON.stringify({ status: "SUCCESS", ...res }, null, 2),
+            },
+          ],
+        };
+      }
+
+      return {
+        content: [{ type: "text", text: JSON.stringify({ status: "UNSUPPORTED_TARGET", target: target.name }) }],
+      };
+    }
+  );
+
+  // 25. peep_restart_app
+  server.tool(
+    "peep_restart_app",
+    "Hot-restarts an application in one operation (force-stops, optionally with root kill, and relaunches). Ideal for LSPosed, Xposed, Frida, and rooted app development loops to test newly applied hooks or builds, verifying launch stability via the crash watchdog.",
+    {
+      app: z.string().describe("Package name or component, e.g. 'com.example.app' or 'com.example.app/.MainActivity'"),
+      useRootKill: z.boolean().default(false).describe("Use root kill before relaunch to ensure all detached native workers and hooks are completely dead"),
+      resetState: z.boolean().default(false).describe("Wipe app data/cache before relaunching (cold start)"),
+      waitForLaunch: z.boolean().default(true).describe("Block until initial activity renders"),
+      extras: z.record(z.union([z.string(), z.number(), z.boolean()])).optional().describe("Intent extras key-value pairs"),
+      platform: z.enum(["android", "browser", "desktop", "ios"]).optional().describe("Target platform"),
+    },
+    async ({ app, useRootKill = false, resetState = false, waitForLaunch = true, extras, platform }) => {
+      logger.info(`[MCP:restart_app] App: ${app}, RootKill: ${useRootKill}, Reset: ${resetState}`);
+      const { target, errorResponse } = validateTarget(platform as TargetPlatform);
+      if (errorResponse) return errorResponse;
+
+      if (target instanceof AndroidTarget) {
+        const res = await target.restartApp({
+          packageOrComponent: app,
+          useRootKill,
+          resetState,
+          waitForLaunch,
+          extras,
+        });
+        const saved = tokenShield.recordShieldedLogs(40, 50);
+        return {
+          content: [
+            {
+              type: "text",
+              text: JSON.stringify(
+                {
+                  status: res.crashDetected ? "CRASH_DETECTED" : "SUCCESS",
+                  app,
+                  activity: res.activity,
+                  launchState: res.launchState,
+                  totalTimeMs: res.totalTimeMs,
+                  killedPids: res.killedPids,
+                  crashDetected: res.crashDetected,
+                  cloudTokensSaved: saved,
+                },
+                null,
+                2
+              ),
+            },
+          ],
+        };
+      }
+
+      return {
+        content: [{ type: "text", text: JSON.stringify({ status: "UNSUPPORTED_TARGET", target: target.name }) }],
+      };
+    }
+  );
+
+  // 26. peep_restart_system_service
+  server.tool(
+    "peep_restart_system_service",
+    "Restarts core Android system services without performing a slow full device reboot. 'zygote' instantly reloads all 32/64-bit Zygote framework hooks and LSPosed modules (~1.5s). 'systemui' reloads status bar and UI overlays (~1s). 'soft_reboot' restarts the Android framework (~2s).",
+    {
+      service: z.enum(["zygote", "systemui", "soft_reboot", "surfaceflinger"]).describe("System service to reload: 'zygote' (LSPosed framework hook reload), 'systemui' (Status bar/QuickSettings), 'soft_reboot' (framework restart), 'surfaceflinger' (compositor restart)"),
+      platform: z.enum(["android", "browser", "desktop", "ios"]).optional().describe("Target platform"),
+    },
+    async ({ service, platform }) => {
+      logger.info(`[MCP:restart_system_service] Service: ${service}`);
+      const { target, errorResponse } = validateTarget(platform as TargetPlatform);
+      if (errorResponse) return errorResponse;
+
+      if (target instanceof AndroidTarget) {
+        const res = await target.restartSystemService(service);
+        return {
+          content: [
+            {
+              type: "text",
+              text: JSON.stringify({ status: "SUCCESS", ...res }, null, 2),
+            },
+          ],
+        };
+      }
+
+      return {
+        content: [{ type: "text", text: JSON.stringify({ status: "UNSUPPORTED_TARGET", target: target.name }) }],
+      };
+    }
+  );
+
+  // 27. peep_execute_root_command
+  server.tool(
+    "peep_execute_root_command",
+    "Executes a privileged shell command on the device with root access (uid=0) via root adbd or 'su -c'. Allows modifying protected files, inspecting /data/adb/ or /data/data/, and running system debugging tools.",
+    {
+      command: z.string().describe("Privileged command string to execute as root"),
+      timeoutMs: z.number().int().default(15000).describe("Timeout in milliseconds"),
+      platform: z.enum(["android", "browser", "desktop", "ios"]).optional().describe("Target platform"),
+    },
+    async ({ command, timeoutMs = 15000, platform }) => {
+      logger.info(`[MCP:root_command] Command: ${command}`);
+      const { target, errorResponse } = validateTarget(platform as TargetPlatform);
+      if (errorResponse) return errorResponse;
+
+      if (target instanceof AndroidTarget) {
+        const res = await target.executeRootCommand(command, timeoutMs);
+        return {
+          content: [
+            {
+              type: "text",
+              text: JSON.stringify(
+                {
+                  status: res.success ? "SUCCESS" : "ERROR",
+                  command,
+                  stdout: res.stdout,
+                },
+                null,
+                2
+              ),
+            },
+          ],
+        };
+      }
+
+      return {
+        content: [{ type: "text", text: JSON.stringify({ status: "UNSUPPORTED_TARGET", target: target.name }) }],
+      };
+    }
+  );
+
+  // 28. peep_manage_selinux
+  server.tool(
+    "peep_manage_selinux",
+    "Inspects or alters SELinux enforcement mode ('get', 'permissive', 'enforcing'). Crucial when diagnosing avc: denied policy denials during rooted app, Magisk, or LSPosed module development.",
+    {
+      action: z.enum(["get", "permissive", "enforcing"]).describe("SELinux action: 'get' queries mode, 'permissive' sets setenforce 0, 'enforcing' sets setenforce 1"),
+      platform: z.enum(["android", "browser", "desktop", "ios"]).optional().describe("Target platform"),
+    },
+    async ({ action, platform }) => {
+      logger.info(`[MCP:selinux] Action: ${action}`);
+      const { target, errorResponse } = validateTarget(platform as TargetPlatform);
+      if (errorResponse) return errorResponse;
+
+      if (target instanceof AndroidTarget) {
+        const res = await target.manageSelinux(action);
+        return {
+          content: [
+            {
+              type: "text",
+              text: JSON.stringify({ status: "SUCCESS", action, ...res }, null, 2),
+            },
+          ],
+        };
+      }
+
+      return {
+        content: [{ type: "text", text: JSON.stringify({ status: "UNSUPPORTED_TARGET", target: target.name }) }],
+      };
+    }
+  );
+
+  // 29. peep_list_processes
+  server.tool(
+    "peep_list_processes",
+    "Lists active Linux/Android processes, their PIDs, PPIDs, UIDs, and command lines. Identifies running daemons, Magisk/LSPosed workers, and background child processes.",
+    {
+      filter: z.string().optional().describe("Optional substring search to filter process command line or name"),
+      limit: z.number().int().default(50).describe("Maximum number of processes to return"),
+      platform: z.enum(["android", "browser", "desktop", "ios"]).optional().describe("Target platform"),
+    },
+    async ({ filter, limit = 50, platform }) => {
+      logger.info(`[MCP:list_processes] Filter: ${filter || "*"}`);
+      const { target, errorResponse } = validateTarget(platform as TargetPlatform);
+      if (errorResponse) return errorResponse;
+
+      if (target instanceof AndroidTarget) {
+        const processes = await target.listProcesses(filter, limit);
+        return {
+          content: [
+            {
+              type: "text",
+              text: JSON.stringify({ status: "SUCCESS", count: processes.length, processes }, null, 2),
+            },
+          ],
+        };
+      }
+
+      return {
+        content: [{ type: "text", text: JSON.stringify({ status: "UNSUPPORTED_TARGET", target: target.name }) }],
+      };
+    }
+  );
+
+  // 30. peep_set_component_enabled
+  server.tool(
+    "peep_set_component_enabled",
+    "Enables or disables an application component (Activity, Service, Receiver, Provider) using PackageManager (pm enable/disable). Essential for testing hook toggles, component suppression, or state persistence in rooted apps.",
+    {
+      component: z.string().describe("Component specification (e.g. 'com.example.app/.services.SyncService')"),
+      enabled: z.boolean().describe("Whether to enable (true) or disable (false) the component"),
+      useRoot: z.boolean().default(false).describe("Execute command as root if target app has protected permissions"),
+      platform: z.enum(["android", "browser", "desktop", "ios"]).optional().describe("Target platform"),
+    },
+    async ({ component, enabled, useRoot = false, platform }) => {
+      logger.info(`[MCP:component_state] Component: ${component}, Enabled: ${enabled}, Root: ${useRoot}`);
+      const { target, errorResponse } = validateTarget(platform as TargetPlatform);
+      if (errorResponse) return errorResponse;
+
+      if (target instanceof AndroidTarget) {
+        const res = await target.setComponentEnabled(component, enabled, useRoot);
+        return {
+          content: [
+            {
+              type: "text",
+              text: JSON.stringify({ status: "SUCCESS", ...res }, null, 2),
+            },
+          ],
+        };
+      }
+
+      return {
+        content: [{ type: "text", text: JSON.stringify({ status: "UNSUPPORTED_TARGET", target: target.name }) }],
+      };
+    }
+  );
+
+  // 31. peep_system_properties
+  server.tool(
+    "peep_system_properties",
+    "Reads or writes Android system properties (getprop / setprop). Useful for inspecting build properties, LSPosed debug flags, or setting system configuration values.",
+    {
+      action: z.enum(["get", "set"]).describe("Action: 'get' to read, 'set' to write"),
+      name: z.string().describe("Property name (e.g. 'persist.sys.locale' or 'debug.stagefright.ccodec')"),
+      value: z.string().optional().describe("Property value (required if action='set')"),
+      useRoot: z.boolean().default(false).describe("Set property as root (required for protected or persist.* properties)"),
+      platform: z.enum(["android", "browser", "desktop", "ios"]).optional().describe("Target platform"),
+    },
+    async ({ action, name, value, useRoot = false, platform }) => {
+      logger.info(`[MCP:sys_prop] Action: ${action}, Name: ${name}`);
+      const { target, errorResponse } = validateTarget(platform as TargetPlatform);
+      if (errorResponse) return errorResponse;
+
+      if (target instanceof AndroidTarget) {
+        if (action === "get") {
+          const val = await target.getSystemProperty(name);
+          return {
+            content: [
+              {
+                type: "text",
+                text: JSON.stringify({ status: "SUCCESS", action: "get", name, value: val }, null, 2),
+              },
+            ],
+          };
+        } else {
+          if (value === undefined) throw new Error("value parameter is required for action='set'");
+          await target.setSystemProperty(name, value, useRoot);
+          return {
+            content: [
+              {
+                type: "text",
+                text: JSON.stringify({ status: "SUCCESS", action: "set", name, value }, null, 2),
+              },
+            ],
+          };
+        }
+      }
+
+      return {
+        content: [{ type: "text", text: JSON.stringify({ status: "UNSUPPORTED_TARGET", target: target.name }) }],
+      };
+    }
+  );
 }

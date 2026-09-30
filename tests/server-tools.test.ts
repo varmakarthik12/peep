@@ -75,6 +75,53 @@ describe("MCP Server Tools Registration & Handlers", () => {
         { packageName: "com.example.app", isSystem: false },
         { packageName: "com.android.chrome", isSystem: true },
       ]),
+      forceStopProcess: vi.fn().mockResolvedValue({
+        target: "com.example.app",
+        killed: true,
+        method: "am_force_stop",
+        terminatedPids: [1234],
+      }),
+      restartApp: vi.fn().mockResolvedValue({
+        packageName: "com.example.app",
+        totalTimeMs: 250,
+        waitTimeMs: 180,
+        launchState: "HOT",
+        hasCrashed: false,
+      }),
+      restartSystemService: vi.fn().mockResolvedValue({
+        service: "zygote",
+        success: true,
+        executionTimeMs: 120,
+        message: "Service zygote restarted successfully.",
+      }),
+      executeRootCommand: vi.fn().mockResolvedValue({
+        command: "id",
+        success: true,
+        exitCode: 0,
+        stdout: "uid=0(root) gid=0(root)",
+        stderr: "",
+        durationMs: 45,
+      }),
+      manageSelinux: vi.fn().mockResolvedValue({
+        mode: "Permissive",
+        previousMode: "Enforcing",
+        success: true,
+      }),
+      listProcesses: vi.fn().mockResolvedValue([
+        { user: "root", pid: 1, ppid: 0, cmd: "init" },
+        { user: "u0_a123", pid: 1234, ppid: 567, cmd: "com.example.app" },
+      ]),
+      setComponentEnabled: vi.fn().mockResolvedValue({
+        component: "com.example.app/.MainActivity",
+        enabled: true,
+        success: true,
+      }),
+      getSystemProperty: vi.fn().mockResolvedValue("1"),
+      setSystemProperty: vi.fn().mockResolvedValue({
+        name: "debug.test",
+        value: "1",
+        success: true,
+      }),
     });
 
     mockProvider = {
@@ -97,7 +144,7 @@ describe("MCP Server Tools Registration & Handlers", () => {
     registerTools(mockServer, mockTarget, mockProvider, mapper);
   });
 
-  it("registers all 23 Peep v0.2.0 MCP tools", () => {
+  it("registers all 31 Peep MCP tools (including Root & LSPosed Developer Suite)", () => {
     const expectedTools = [
       "peep_find_and_tap",
       "peep_type_text",
@@ -122,9 +169,17 @@ describe("MCP Server Tools Registration & Handlers", () => {
       "peep_browser_navigate",
       "peep_browser_get_distilled_dom",
       "peep_window_management",
+      "peep_force_stop_process",
+      "peep_restart_app",
+      "peep_restart_system_service",
+      "peep_execute_root_command",
+      "peep_manage_selinux",
+      "peep_list_processes",
+      "peep_set_component_enabled",
+      "peep_system_properties",
     ];
 
-    expect(Object.keys(tools)).toHaveLength(23);
+    expect(Object.keys(tools)).toHaveLength(31);
     for (const name of expectedTools) {
       expect(tools[name]).toBeDefined();
     }
@@ -589,6 +644,126 @@ describe("MCP Server Tools Registration & Handlers", () => {
     });
   });
 
+  describe("Root & LSPosed Developer Suite Tools", () => {
+    it("peep_force_stop_process kills persistent apps and detached daemons", async () => {
+      const res = await tools["peep_force_stop_process"]({
+        target: "com.example.app",
+        useRoot: true,
+        killAllMatching: true,
+      });
+      const data = JSON.parse(res.content[0].text);
+      expect(data.status).toBe("SUCCESS");
+      expect(data.target).toBe("com.example.app");
+      expect(data.killed).toBe(true);
+      expect(mockTarget.forceStopProcess).toHaveBeenCalledWith("com.example.app", {
+        useRoot: true,
+        killAllMatching: true,
+      });
+    });
+
+    it("peep_restart_app performs hot restart with crash watchdog monitoring", async () => {
+      const res = await tools["peep_restart_app"]({
+        app: "com.example.app",
+        useRootKill: true,
+        resetState: false,
+        waitForLaunch: true,
+      });
+      const data = JSON.parse(res.content[0].text);
+      expect(data.status).toBe("SUCCESS");
+      expect(data.app).toBe("com.example.app");
+      expect(data.totalTimeMs).toBe(250);
+      expect(mockTarget.restartApp).toHaveBeenCalledWith({
+        packageOrComponent: "com.example.app",
+        useRootKill: true,
+        resetState: false,
+        waitForLaunch: true,
+        extras: undefined,
+      });
+    });
+
+    it("peep_restart_system_service performs instant Zygote and SystemUI hook reload", async () => {
+      const res = await tools["peep_restart_system_service"]({
+        service: "zygote",
+      });
+      const data = JSON.parse(res.content[0].text);
+      expect(data.status).toBe("SUCCESS");
+      expect(data.service).toBe("zygote");
+      expect(data.executionTimeMs).toBe(120);
+      expect(mockTarget.restartSystemService).toHaveBeenCalledWith("zygote");
+    });
+
+    it("peep_execute_root_command executes privileged root command and returns output", async () => {
+      const res = await tools["peep_execute_root_command"]({
+        command: "id",
+        timeoutMs: 5000,
+      });
+      const data = JSON.parse(res.content[0].text);
+      expect(data.status).toBe("SUCCESS");
+      expect(data.stdout).toBe("uid=0(root) gid=0(root)");
+      expect(mockTarget.executeRootCommand).toHaveBeenCalledWith("id", 5000);
+    });
+
+    it("peep_manage_selinux queries and toggles SELinux enforcement", async () => {
+      const res = await tools["peep_manage_selinux"]({
+        action: "permissive",
+      });
+      const data = JSON.parse(res.content[0].text);
+      expect(data.status).toBe("SUCCESS");
+      expect(data.mode).toBe("Permissive");
+      expect(data.previousMode).toBe("Enforcing");
+      expect(mockTarget.manageSelinux).toHaveBeenCalledWith("permissive");
+    });
+
+    it("peep_list_processes parses running processes with filter and limit", async () => {
+      const res = await tools["peep_list_processes"]({
+        filter: "example",
+        limit: 10,
+      });
+      const data = JSON.parse(res.content[0].text);
+      expect(data.status).toBe("SUCCESS");
+      expect(data.count).toBe(2);
+      expect(data.processes).toHaveLength(2);
+      expect(mockTarget.listProcesses).toHaveBeenCalledWith("example", 10);
+    });
+
+    it("peep_set_component_enabled enables or disables application components", async () => {
+      const res = await tools["peep_set_component_enabled"]({
+        component: "com.example.app/.MainActivity",
+        enabled: true,
+        useRoot: true,
+      });
+      const data = JSON.parse(res.content[0].text);
+      expect(data.status).toBe("SUCCESS");
+      expect(data.component).toBe("com.example.app/.MainActivity");
+      expect(data.enabled).toBe(true);
+      expect(mockTarget.setComponentEnabled).toHaveBeenCalledWith("com.example.app/.MainActivity", true, true);
+    });
+
+    it("peep_system_properties gets and sets system properties", async () => {
+      // Get
+      const getRes = await tools["peep_system_properties"]({
+        action: "get",
+        name: "debug.test",
+      });
+      const getData = JSON.parse(getRes.content[0].text);
+      expect(getData.status).toBe("SUCCESS");
+      expect(getData.value).toBe("1");
+      expect(mockTarget.getSystemProperty).toHaveBeenCalledWith("debug.test");
+
+      // Set
+      const setRes = await tools["peep_system_properties"]({
+        action: "set",
+        name: "debug.test",
+        value: "1",
+        useRoot: true,
+      });
+      const setData = JSON.parse(setRes.content[0].text);
+      expect(setData.status).toBe("SUCCESS");
+      expect(setData.name).toBe("debug.test");
+      expect(mockTarget.setSystemProperty).toHaveBeenCalledWith("debug.test", "1", true);
+    });
+  });
+
   describe("Browser & Desktop Target Specific Tools", () => {
     let browserTools: Record<string, Function> = {};
     let mockBrowserTarget: BrowserTarget;
@@ -751,6 +926,14 @@ describe("MCP Server Tools Registration & Handlers", () => {
         () => desktopTools["peep_set_screen_orientation"]({ orientation: "portrait" }),
         () => desktopTools["peep_manage_files"]({ action: "delete", devicePath: "/test" }),
         () => desktopTools["peep_list_apps"]({}),
+        () => desktopTools["peep_force_stop_process"]({ target: "test.pkg" }),
+        () => desktopTools["peep_restart_app"]({ app: "test.pkg" }),
+        () => desktopTools["peep_restart_system_service"]({ service: "zygote" }),
+        () => desktopTools["peep_execute_root_command"]({ command: "id" }),
+        () => desktopTools["peep_manage_selinux"]({ action: "get" }),
+        () => desktopTools["peep_list_processes"]({}),
+        () => desktopTools["peep_set_component_enabled"]({ component: "pkg/.Act", state: "enable" }),
+        () => desktopTools["peep_system_properties"]({ action: "get", name: "prop" }),
       ];
 
       for (const runTool of toolsToTest) {

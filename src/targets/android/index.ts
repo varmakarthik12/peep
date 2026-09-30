@@ -228,6 +228,61 @@ export class AndroidTarget extends BaseTarget {
     return this.adb.getForegroundActivity();
   }
 
+  async forceStopProcess(
+    target: string | number,
+    options?: { useRoot?: boolean; killAllMatching?: boolean }
+  ) {
+    return this.adb.forceStopProcess(target, options);
+  }
+
+  async restartApp(options: {
+    packageOrComponent: string;
+    useRootKill?: boolean;
+    resetState?: boolean;
+    waitForLaunch?: boolean;
+    extras?: Record<string, string | number | boolean>;
+  }) {
+    const res = await this.adb.restartApp(options);
+    await new Promise((r) => setTimeout(r, 300));
+    const watchdog = await this.checkCrashWatchdog();
+    if (watchdog.hasCrashed) {
+      return { ...res, crashDetected: watchdog.reason };
+    }
+    return res;
+  }
+
+  async restartSystemService(service: "zygote" | "systemui" | "soft_reboot" | "surfaceflinger") {
+    return this.adb.restartSystemService(service);
+  }
+
+  async executeRootCommand(command: string, timeoutMs?: number) {
+    return this.adb.executeRootCommand(command, timeoutMs);
+  }
+
+  async isRootAvailable() {
+    return this.adb.isRootAvailable();
+  }
+
+  async manageSelinux(action: "get" | "permissive" | "enforcing") {
+    return this.adb.manageSelinux(action);
+  }
+
+  async listProcesses(filter?: string, limit?: number) {
+    return this.adb.listProcesses(filter, limit);
+  }
+
+  async setComponentEnabled(component: string, enabled: boolean, useRoot = false) {
+    return this.adb.setComponentEnabled(component, enabled, useRoot);
+  }
+
+  async getSystemProperty(name: string) {
+    return this.adb.getSystemProperty(name);
+  }
+
+  async setSystemProperty(name: string, value: string, useRoot = false) {
+    return this.adb.setSystemProperty(name, value, useRoot);
+  }
+
   async close(): Promise<void> {
     this.logcat.stop();
     await this.adb.close();

@@ -396,4 +396,197 @@ package:com.android.chrome`);
       expect(system[0].isSystem).toBe(true);
     });
   });
+
+  describe("Root & LSPosed Operations", () => {
+    let client: AdbClient;
+
+    beforeEach(() => {
+      client = new AdbClient("adb", "test-device");
+      vi.spyOn(client, "autoSelectDevice").mockResolvedValue("test-device");
+    });
+
+    it("isRootAvailable detects root via uid=0 or su -c", async () => {
+      // Direct root adbd
+      vi.spyOn(client, "shell").mockResolvedValueOnce("uid=0(root) gid=0(root)");
+      const hasRootDirect = await client.isRootAvailable();
+      expect(hasRootDirect.available).toBe(true);
+      expect(hasRootDirect.method).toBe("adbd_root");
+
+      // su -c root fallback
+      vi.spyOn(client, "shell")
+        .mockRejectedValueOnce(new Error("Permission denied"))
+        .mockResolvedValueOnce("uid=0(root) gid=0(root)");
+      const hasRootSu = await client.isRootAvailable();
+      expect(hasRootSu.available).toBe(true);
+      expect(hasRootSu.method).toBe("su_binary");
+
+      // No root
+      vi.spyOn(client, "shell")
+        .mockResolvedValueOnce("uid=2000(shell) gid=2000(shell)")
+        .mockRejectedValueOnce(new Error("su: not found"));
+      const noRoot = await client.isRootAvailable();
+      expect(noRoot.available).toBe(false);
+      expect(noRoot.method).toBe("none");
+    });
+
+    it("executeRootCommand runs command via root adbd or su -c", async () => {
+      vi.spyOn(client, "isRootAvailable").mockResolvedValue({ available: true, method: "adbd_root" });
+      const shellSpy = vi.spyOn(client, "shell").mockResolvedValue("root_output\n");
+
+      const result = await client.executeRootCommand("whoami");
+      expect(result.success).toBe(true);
+      expect(result.stdout).toContain("root_output");
+      expect(shellSpy).toHaveBeenCalled();
+    });
+
+    it("forceStopProcess kills by package, PID, and detached daemons", async () => {
+      vi.spyOn(client, "isRootAvailable").mockResolvedValue({ available: true, method: "adbd_root" });
+      const shellSpy = vi.spyOn(client, "shell").mockImplementation(async (cmd: any) => {
+        const cmdStr = Array.isArray(cmd) ? cmd.join(" ") : cmd;
+        if (cmdStr.includes("pgrep -f")) {
+          return "1234\n5678\n";
+        }
+        return "";
+      });
+
+      // Package name with killAllMatching
+      const res = await client.forceStopProcess("com.example.stubborn", {
+        useRoot: true,
+        killAllMatching: true,
+      });
+
+      expect(res.success).toBe(true);
+      expect(res.target).toBe("com.example.stubborn");
+      expect(res.killedPids).toContain(1234);
+      expect(res.killedPids).toContain(5678);
+
+      // Numeric PID
+      const pidRes = await client.forceStopProcess(9999, { useRoot: true });
+      expect(pidRes.success).toBe(true);
+      expect(pidRes.killedPids).toEqual([9999]);
+    });
+
+    it("restartSystemService triggers service reloads", async () => {
+      vi.spyOn(client, "executeRootCommand").mockResolvedValue({
+        command: "",
+        exitCode: 0,
+        stdout: "",
+        stderr: "",
+        durationMs: 5,
+      });
+      vi.spyOn(client, "shell").mockResolvedValue("");
+
+      // Mock setTimeout so tests don't actually wait multiple seconds
+      vi.useFakeTimers();
+      try {
+        const zygotePromise = client.restartSystemService("zygote");
+        await vi.runAllTimersAsync();
+        const zygoteRes = await zygotePromise;
+        expect(zygoteRes.success).toBe(true);
+        expect(zygoteRes.service).toBe("zygote");
+
+        const systemUiPromise = client.restartSystemService("systemui");
+        await vi.runAllTimersAsync();
+        const systemUiRes = await systemUiPromise;
+        expect(systemUiRes.success).toBe(true);
+        expect(systemUiRes.service).toBe("systemui");
+
+        const softRebootPromise = client.restartSystemService("soft_reboot");
+        await vi.runAllTimersAsync();
+        const softRebootRes = await softRebootPromise;
+        expect(softRebootRes.success).toBe(true);
+        expect(softRebootRes.service).toBe("soft_reboot");
+      } finally {
+        vi.useRealTimers();
+      }
+    });
+
+    it("manageSelinux gets and modifies enforcement modes", async () => {
+      vi.spyOn(client, "isRootAvailable").mockResolvedValue({ available: true, method: "adbd_root" });
+
+      // Get
+      vi.spyOn(client, "shell").mockResolvedValueOnce("Enforcing\n");
+      const getRes = await client.manageSelinux("get");
+      expect(getRes.mode).toBe("Enforcing");
+
+      // Permissive
+      vi.spyOn(client, "shell")
+        .mockResolvedValueOnce("Enforcing\n") // before
+        .mockResolvedValueOnce("") // setenforce 0
+        .mockResolvedValueOnce("Permissive\n"); // after
+      const permRes = await client.manageSelinux("permissive");
+      expect(permRes.mode).toBe("Permissive");
+      expect(permRes.previousMode).toBe("Enforcing");
+      expect(permRes.success).toBe(true);
+
+      // Enforcing
+      vi.spyOn(client, "shell")
+        .mockResolvedValueOnce("Permissive\n") // before
+        .mockResolvedValueOnce("") // setenforce 1
+        .mockResolvedValueOnce("Enforcing\n"); // after
+      const enfRes = await client.manageSelinux("enforcing");
+      expect(enfRes.mode).toBe("Enforcing");
+      expect(enfRes.previousMode).toBe("Permissive");
+      expect(enfRes.success).toBe(true);
+    });
+
+    it("listProcesses parses process output and applies filters", async () => {
+      const psOutput = `USER           PID  PPID     VSZ    RSS WCHAN            ADDR S CMD
+root             1     0   22484   3244 0                   0 S init
+system        1120     1 1542300 120400 0                   0 S system_server
+u0_a150       4520  1120 2314500 185600 0                   0 S com.example.app
+u0_a150       4580  4520   12400   2100 0                   0 S /data/local/tmp/daemon`;
+
+      vi.spyOn(client, "shell").mockResolvedValue(psOutput);
+
+      // Filter for "example"
+      const processes = await client.listProcesses("example", 10);
+      expect(processes).toHaveLength(1);
+      expect(processes[0].uid).toBe("u0_a150");
+      expect(processes[0].pid).toBe(4520);
+      expect(processes[0].cmd).toBe("com.example.app");
+
+      // All with limit
+      const all = await client.listProcesses(undefined, 2);
+      expect(all).toHaveLength(2);
+    });
+
+    it("setComponentEnabled toggles component state via pm enable/disable", async () => {
+      const shellSpy = vi.spyOn(client, "shell").mockResolvedValue("Component state changed.\n");
+
+      const res = await client.setComponentEnabled("com.example.app/.MainActivity", true);
+      expect(res.component).toBe("com.example.app/.MainActivity");
+      expect(res.enabled).toBe(true);
+      expect(shellSpy).toHaveBeenCalledWith(
+        ["pm", "enable", "com.example.app/.MainActivity"],
+        10000,
+        undefined
+      );
+
+      const disableRes = await client.setComponentEnabled("com.example.app/.MainActivity", false);
+      expect(disableRes.component).toBe("com.example.app/.MainActivity");
+      expect(disableRes.enabled).toBe(false);
+      expect(shellSpy).toHaveBeenCalledWith(
+        ["pm", "disable", "com.example.app/.MainActivity"],
+        10000,
+        undefined
+      );
+    });
+
+    it("getSystemProperty and setSystemProperty reads and writes properties", async () => {
+      vi.spyOn(client, "shell").mockResolvedValueOnce("1\n");
+      const val = await client.getSystemProperty("debug.test");
+      expect(val).toBe("1");
+
+      const shellSpy = vi.spyOn(client, "shell").mockResolvedValueOnce("");
+      const setRes = await client.setSystemProperty("debug.test", "0");
+      expect(setRes.name).toBe("debug.test");
+      expect(setRes.value).toBe("0");
+      expect(shellSpy).toHaveBeenCalledWith(
+        ["setprop", "debug.test", "0"],
+        10000,
+        undefined
+      );
+    });
+  });
 });

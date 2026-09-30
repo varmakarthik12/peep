@@ -34,9 +34,9 @@ When AI coding harnesses interact with Android devices, agents frequently defaul
 
 ---
 
-### ✨ Added — 15 New MCP Domain Tools (23 Total)
+### ✨ Added — 23 New MCP Domain Tools (31 Total)
 
-Peep v0.2.0 introduces 15 new high-level MCP domain tools organized into clear operational domains:
+Peep v0.2.0 introduces 23 new high-level MCP domain tools organized into clear operational domains:
 
 #### 1. App Lifecycle & OS Control
 - **`peep_launch_app`**: Launches application by package or component name (`com.example.app` or `com.example.app/.MainActivity`). Automatically resolves default launcher activities via `cmd package resolve-activity`, supports clean restarts (`stopExisting: true`), factory cache resets (`resetState: true`), intent extras, and synchronous crash checks. Returns cold/warm startup latency in milliseconds.
@@ -52,12 +52,22 @@ Peep v0.2.0 introduces 15 new high-level MCP domain tools organized into clear o
 - **`peep_manage_files`**: Bidirectional file operations between host and device (`push`, `pull`, `delete`) with automatic media scanner broadcasts (`scanFile`) to ensure pushed media appears immediately in Android gallery/file pickers.
 - **`peep_clipboard`**: First-class clipboard management (`set`, `get`, `paste`). Avoids brittle character-by-character shell escaping when inputting complex passwords, OAuth tokens, and URLs.
 
-#### 2. Multi-Target Peripherals (Browser & Desktop)
+#### 2. Root & LSPosed Developer Suite (8 Tools)
+- **`peep_force_stop_process`**: Exterminates stubborn application processes, persistent system services, and detached native daemons matching PID or package name using `am force-stop` + `pgrep -f` + root `kill -9`.
+- **`peep_restart_app`**: Hot-restarts application in one atomic call, completely exterminating detached worker daemons and verifying launch stability via the synchronous crash watchdog.
+- **`peep_restart_system_service`**: Restarts core system services without performing slow device hardware reboots (`zygote` reloads all LSPosed/Xposed framework hooks in ~1.5s; `systemui` in ~1.2s; `soft_reboot` in ~2s).
+- **`peep_execute_root_command`**: Executes privileged shell commands with root access (`uid=0`) via `su -c` or root `adbd`.
+- **`peep_manage_selinux`**: Inspects (`getenforce`) or alters SELinux enforcement mode (`permissive` / `enforcing`) for `avc: denied` audit log debugging.
+- **`peep_list_processes`**: Dynamic, header-aware process inspection (`PID`, `PPID`, `UID`, `CMD`) to identify running background daemons and child processes.
+- **`peep_set_component_enabled`**: Enables or disables application activities, services, receivers, and providers via `pm enable/disable`.
+- **`peep_system_properties`**: Reads (`getprop`) or writes (`setprop`) Android system properties.
+
+#### 3. Multi-Target Peripherals (Browser & Desktop)
 - **`peep_browser_navigate`**: Routes web navigation through local Playwright headless Chromium or launches Android Chrome with the target URL.
 - **`peep_browser_get_distilled_dom`**: Extracts an accessibility-distilled semantic DOM tree containing interactive landmarks, ARIA labels, and assigned reference IDs, saving 95%+ of raw HTML tokens compared to raw page dumps.
 - **`peep_window_management`**: Desktop window management interface (`list`, `focus`, `get_metrics`) for managing test target windows on macOS, Windows, and Linux.
 
-#### 3. Core Perception & Interaction Suite (Retained & Optimized)
+#### 4. Core Perception & Interaction Suite (Retained & Optimized)
 - **`peep_find_and_tap`**: Three-tier hybrid perception tap. Uses Tier 0 accessibility tree (~15ms, 0 tokens) or Tier 2 local vision models.
 - **`peep_type_text`**: Sanitized text input with optional field pre-clearing (`clearFirst: true`).
 - **`peep_swipe`**: Directional gestures (`up`, `down`, `left`, `right`) with calibrated distance profiles.

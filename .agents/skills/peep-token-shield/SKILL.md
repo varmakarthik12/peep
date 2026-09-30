@@ -50,10 +50,18 @@ When the user invokes `/peep`, they want you to interact with or validate a peri
 - `/peep goal "<multi-step goal>"`: Hand off a multi-step routine to the local autonomous micro-loop.
 - `/peep stats`: Retrieve cumulative session tokens and estimated dollar savings.
 - `/peep devices`: Inspect connected Android devices/emulators.
+- `/peep kill <target> [--root]`: Exterminate stubborn persistent processes or detached daemons.
+- `/peep restart <app> [--root] [--reset]`: Hot-restart application and verify launch stability via crash watchdog.
+- `/peep reload <service>`: Instant hook reload without reboot (`zygote` ~1.5s, `systemui` ~1.2s, `soft_reboot` ~2s).
+- `/peep root "<cmd>"`: Run privileged shell command as root (`uid=0`).
+- `/peep selinux [action]`: Inspect or toggle SELinux mode (`get`, `permissive`, `enforcing`).
+- `/peep ps [-f filter]`: Formatted process inspection (PID, PPID, UID, CMD).
+- `/peep component <comp> <state>`: Enable or disable app activities, services, and receivers.
+- `/peep prop <get|set> <name> [val]`: Read or write Android system properties (`getprop` / `setprop`).
 
 ---
 
-## Complete Peep MCP Tools Reference (v0.2.0)
+## Complete Peep MCP Tools Reference (31 Tools)
 
 ### 1. App Lifecycle & System State
 - **`peep_launch_app(app, stopExisting?, resetState?, waitForLaunch?, extras?)`**:
@@ -101,10 +109,28 @@ When the user invokes `/peep`, they want you to interact with or validate a peri
 - **`peep_get_telemetry()`**:
   Session token shield telemetry and dollar savings.
 
-### 4. Browser & Desktop Targets (v0.2.0)
+### 4. Multi-Target Extensions (Browser & Desktop)
 - **`peep_browser_navigate(url, waitForLoad?, timeoutMs?)`**:
   Navigates Playwright headless Chromium or Android Chrome to web URL.
 - **`peep_browser_get_distilled_dom(selector?, maxDepth?)`**:
   Extracts distilled semantic DOM tree (interactive landmarks and reference IDs only), saving 95%+ of raw HTML tokens.
 - **`peep_window_management(action, title?)`**:
   Desktop window management (`list`, `focus`, `get_metrics`).
+
+### 5. Root & LSPosed Developer Suite (8 Tools)
+- **`peep_force_stop_process(target, useRoot?, killAllMatching?, platform?)`**:
+  Exterminates stubborn applications, persistent root daemons, or background worker threads by package name, process name, or numeric PID (`kill -9` via su/root adbd).
+- **`peep_restart_app(app, useRootKill?, resetState?, waitForLaunch?, extras?, platform?)`**:
+  Atomic hot-restart that kills previous instances/daemons, optionally wipes cache/state, relaunches the app, and verifies launch stability with the crash watchdog.
+- **`peep_restart_system_service(service, platform?)`**:
+  Instantly restarts Android system services without performing a slow 60s device reboot. `'zygote'` reloads all 32/64-bit Zygote framework hooks and LSPosed modules in ~1.5s; `'systemui'` reloads status bar overlays in ~1.2s; `'soft_reboot'` restarts the entire framework in ~2s.
+- **`peep_execute_root_command(command, timeoutMs?, platform?)`**:
+  Executes privileged root shell commands (`uid=0`) via root adbd or `'su -c'`.
+- **`peep_manage_selinux(action, platform?)`**:
+  Inspects or modifies SELinux enforcement (`'get'`, `'permissive'`, `'enforcing'`) for diagnosing `avc: denied` audit log denials.
+- **`peep_list_processes(filter?, limit?, platform?)`**:
+  Formatted process list (PID, PPID, UID, CMD) for inspecting running processes and detached daemons.
+- **`peep_set_component_enabled(component, enabled, useRoot?, platform?)`**:
+  Enables or disables individual application components (Activities, Services, Receivers) via `pm enable/disable`.
+- **`peep_system_properties(action, name, value?, useRoot?, platform?)`**:
+  Reads or sets Android system properties (`getprop` / `setprop`).

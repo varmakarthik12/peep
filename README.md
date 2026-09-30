@@ -235,6 +235,17 @@ peep clipboard set "secret_token_123"
 peep deeplink "myapp://checkout"
 peep apps --filter third_party
 
+# Root, LSPosed & Magisk Module Engineering
+peep kill com.example.stubborn --root       # Exterminate persistent apps & detached daemons (kill -9)
+peep restart com.example.app --root        # Hot restart killing all daemons, verified by crash watchdog
+peep reload zygote                         # Instant reload of all LSPosed/Xposed hooks (~1.5s, no device reboot)
+peep reload systemui                       # Instant reload of status bar & UI overlay modules (~1.2s)
+peep root "cat /data/adb/modules/list"     # Execute privileged shell command as root (uid=0)
+peep selinux permissive                    # Toggle SELinux mode for avc: denied debugging
+peep ps -f myapp -n 10                     # Formatted process inspection (PID, PPID, UID, CMD)
+peep component com.example.app/.Sync enable # Enable/disable Activities, Services, Receivers
+peep prop get ro.build.version.release     # Read Android system properties (getprop)
+
 # Physical Touch & Gestures
 peep tap "Login Button"
 peep type "alice@example.com" --target "Email Address"
@@ -419,7 +430,15 @@ In `mcp_settings.json`:
         "peep_list_apps",
         "peep_browser_navigate",
         "peep_browser_get_distilled_dom",
-        "peep_window_management"
+        "peep_window_management",
+        "peep_force_stop_process",
+        "peep_restart_app",
+        "peep_restart_system_service",
+        "peep_execute_root_command",
+        "peep_manage_selinux",
+        "peep_list_processes",
+        "peep_set_component_enabled",
+        "peep_system_properties"
       ]
     }
   }
@@ -604,7 +623,7 @@ logLevel: "info"              # 'debug', 'info', 'warn', 'error', 'silent'
 
 ---
 
-## 🛠️ Complete MCP Tools Reference (v0.2.0 — 23 Tools)
+## 🛠️ Complete MCP Tools Reference (31 Tools)
 
 ### 1. Screen Perception & Interaction
 | MCP Tool Name | Description | Cloud Token Cost |
@@ -644,6 +663,18 @@ logLevel: "info"              # 'debug', 'info', 'warn', 'error', 'silent'
 | `peep_browser_navigate` | Navigates Playwright headless Chromium or mobile Chrome to web URL. | ~40 text tokens |
 | `peep_browser_get_distilled_dom` | Extracts accessibility-distilled semantic DOM tree (interactive landmarks and IDs). | ~80 text tokens (vs 15,000 raw HTML) |
 | `peep_window_management` | Desktop OS window management (`list`, `focus`, `get_metrics`). | ~40 text tokens |
+
+### 5. Root & LSPosed Developer Suite (8 Tools)
+| MCP Tool Name | Description | Cloud Token Cost |
+| :--- | :--- | :--- |
+| `peep_force_stop_process` | Exterminates stubborn apps, detached native daemons, and processes by PID or name (`kill -9` via su/root adbd). | ~35 text tokens |
+| `peep_restart_app` | Hot-restarts app in one atomic call (kills daemons, clears state option, restarts, checks crash watchdog). | ~45 text tokens |
+| `peep_restart_system_service` | Instant hook reload (`zygote` reloads all LSPosed hooks in ~1.5s; `systemui` in ~1.2s; `soft_reboot` in ~2s). | ~35 text tokens |
+| `peep_execute_root_command` | Executes privileged shell commands with root access (`uid=0`) via `su -c` or root adbd. | ~40 text tokens |
+| `peep_manage_selinux` | Inspects or alters SELinux enforcement mode (`get`, `permissive`, `enforcing`) for `avc: denied` debugging. | ~30 text tokens |
+| `peep_list_processes` | Formatted process inspection (`PID`, `PPID`, `UID`, `Command`) for identifying background daemons and child processes. | ~45 text tokens |
+| `peep_set_component_enabled` | Enables/disables app activities, receivers, and services (`pm enable/disable`). | ~35 text tokens |
+| `peep_system_properties` | Reads or writes Android system properties (`getprop` / `setprop`). | ~30 text tokens |
 
 ---
 

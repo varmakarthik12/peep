@@ -42,6 +42,35 @@ export interface DeepLinkResult {
   crashDetected?: string;
 }
 
+export interface ProcessInfo {
+  uid: string;
+  pid: number;
+  ppid: number;
+  cmd: string;
+  isRoot: boolean;
+}
+
+export interface ForceStopResult {
+  target: string;
+  success: boolean;
+  killedPids: number[];
+  usedRoot: boolean;
+  message: string;
+}
+
+export interface SystemServiceRestartResult {
+  service: "zygote" | "systemui" | "soft_reboot" | "surfaceflinger";
+  success: boolean;
+  durationMs: number;
+  message: string;
+}
+
+export interface SelinuxResult {
+  mode: string;
+  success: boolean;
+  previousMode?: string;
+}
+
 export class AdbClient {
   private adbPath: string;
   private selectedDeviceId?: string;
@@ -661,6 +690,347 @@ export class AdbClient {
     }
 
     return results;
+  }
+
+  async isRootAvailable(deviceId?: string): Promise<{ available: boolean; method: "adbd_root" | "su_binary" | "none" }> {
+    try {
+      const idOut = await this.shell(["id"], 5000, deviceId);
+      if (idOut.includes("uid=0(root)")) {
+        return { available: true, method: "adbd_root" };
+      }
+    } catch {
+      // ignore
+    }
+    try {
+      const suOut = await this.shell(["su", "-c", "id"], 5000, deviceId);
+      if (suOut.includes("uid=0(root)")) {
+        return { available: true, method: "su_binary" };
+      }
+    } catch {
+      // ignore
+    }
+    return { available: false, method: "none" };
+  }
+
+  async executeRootCommand(
+    command: string,
+    timeoutMs = 15000,
+    deviceId?: string
+  ): Promise<{ stdout: string; success: boolean }> {
+    const rootInfo = await this.isRootAvailable(deviceId);
+    if (!rootInfo.available) {
+      throw new Error("Root access is not available on this device (neither adbd is running as root nor is 'su' working).");
+    }
+    if (rootInfo.method === "adbd_root") {
+      const out = await this.shell(["sh", "-c", command], timeoutMs, deviceId);
+      return { stdout: out, success: true };
+    } else {
+      const escaped = command.replace(/'/g, "'\\''");
+      const out = await this.shell(["su", "-c", `'${escaped}'`], timeoutMs, deviceId);
+      return { stdout: out, success: true };
+    }
+  }
+
+  async forceStopProcess(
+    target: string | number,
+    options: { useRoot?: boolean; killAllMatching?: boolean; deviceId?: string } = {}
+  ): Promise<ForceStopResult> {
+    const targetStr = String(target);
+    const isPid = /^\d+$/.test(targetStr);
+    const killedPids: number[] = [];
+    const usedRoot = options.useRoot ?? false;
+
+    if (isPid) {
+      const pid = parseInt(targetStr, 10);
+      if (usedRoot) {
+        await this.executeRootCommand(`kill -9 ${pid}`, 10000, options.deviceId);
+      } else {
+        await this.shell(["kill", "-9", String(pid)], 10000, options.deviceId);
+      }
+      killedPids.push(pid);
+      return {
+        target: targetStr,
+        success: true,
+        killedPids,
+        usedRoot,
+        message: `Killed process PID ${pid} with SIGKILL${usedRoot ? " (root)" : ""}`,
+      };
+    }
+
+    const packageName = targetStr;
+
+    // 1. Gather all matching PIDs before kill
+    try {
+      const pgrepOut = await this.shell(["pgrep", "-f", packageName], 5000, options.deviceId);
+      const pids = pgrepOut
+        .split(/\r?\n/)
+        .map((s) => parseInt(s.trim(), 10))
+        .filter((n) => !isNaN(n) && n > 0);
+      killedPids.push(...pids);
+    } catch {
+      // none
+    }
+
+    // 2. Standard ActivityManager force-stop
+    try {
+      await this.shell(["am", "force-stop", packageName], 10000, options.deviceId);
+    } catch {
+      // ignore
+    }
+
+    // 3. If root or killAllMatching requested, exterminate any remaining or detached daemons/processes
+    if (options.useRoot || options.killAllMatching) {
+      try {
+        let remainingPids: number[] = [];
+        try {
+          const pgrepRemaining = await this.shell(["pgrep", "-f", packageName], 5000, options.deviceId);
+          remainingPids = pgrepRemaining
+            .split(/\r?\n/)
+            .map((s) => parseInt(s.trim(), 10))
+            .filter((n) => !isNaN(n) && n > 0);
+        } catch {
+          // none
+        }
+
+        if (remainingPids.length > 0) {
+          const pidList = remainingPids.join(" ");
+          if (usedRoot) {
+            await this.executeRootCommand(`kill -9 ${pidList}`, 10000, options.deviceId);
+          } else {
+            await this.shell(["kill", "-9", ...remainingPids.map(String)], 10000, options.deviceId);
+          }
+          for (const p of remainingPids) {
+            if (!killedPids.includes(p)) killedPids.push(p);
+          }
+        }
+      } catch {
+        // ignore
+      }
+    }
+
+    return {
+      target: packageName,
+      success: true,
+      killedPids,
+      usedRoot,
+      message: `Force-stopped ${packageName}${killedPids.length > 0 ? ` (terminated ${killedPids.length} process(es): ${killedPids.join(", ")})` : ""}`,
+    };
+  }
+
+  async restartApp(options: {
+    packageOrComponent: string;
+    useRootKill?: boolean;
+    resetState?: boolean;
+    waitForLaunch?: boolean;
+    extras?: Record<string, string | number | boolean>;
+    deviceId?: string;
+  }): Promise<LaunchResult & { killedPids: number[] }> {
+    const pkg = options.packageOrComponent.includes("/")
+      ? options.packageOrComponent.split("/")[0]
+      : options.packageOrComponent;
+
+    const stopResult = await this.forceStopProcess(pkg, {
+      useRoot: options.useRootKill,
+      killAllMatching: true,
+      deviceId: options.deviceId,
+    });
+
+    if (options.resetState) {
+      try {
+        await this.clearAppData(pkg, options.deviceId);
+      } catch {
+        // ignore
+      }
+    }
+
+    const launchResult = await this.startActivity({
+      packageName: pkg,
+      activity: options.packageOrComponent.includes("/")
+        ? options.packageOrComponent.split("/")[1]
+        : undefined,
+      stopFirst: false,
+      wait: options.waitForLaunch ?? true,
+      extras: options.extras,
+      deviceId: options.deviceId,
+    });
+
+    return {
+      ...launchResult,
+      killedPids: stopResult.killedPids,
+    };
+  }
+
+  async restartSystemService(
+    service: "zygote" | "systemui" | "soft_reboot" | "surfaceflinger",
+    deviceId?: string
+  ): Promise<SystemServiceRestartResult> {
+    const start = Date.now();
+
+    if (service === "zygote") {
+      try {
+        await this.executeRootCommand("setprop ctl.restart zygote; setprop ctl.restart zygote_secondary", 15000, deviceId);
+      } catch {
+        await this.shell(["pkill", "-9", "zygote"], 10000, deviceId);
+      }
+      await new Promise((r) => setTimeout(r, 1500));
+      return {
+        service,
+        success: true,
+        durationMs: Date.now() - start,
+        message: "Restarted 32/64-bit Zygote framework. All hooked processes and framework modules reloaded.",
+      };
+    } else if (service === "systemui") {
+      try {
+        await this.executeRootCommand("pkill -9 -f com.android.systemui", 10000, deviceId);
+      } catch {
+        await this.shell(["pkill", "-9", "-f", "com.android.systemui"], 10000, deviceId);
+      }
+      await new Promise((r) => setTimeout(r, 1200));
+      return {
+        service,
+        success: true,
+        durationMs: Date.now() - start,
+        message: "Restarted SystemUI (com.android.systemui). Status bar and UI overlays reloaded.",
+      };
+    } else if (service === "surfaceflinger") {
+      try {
+        await this.executeRootCommand("setprop ctl.restart surfaceflinger", 10000, deviceId);
+      } catch {
+        await this.shell(["pkill", "-9", "-f", "surfaceflinger"], 10000, deviceId);
+      }
+      await new Promise((r) => setTimeout(r, 1000));
+      return {
+        service,
+        success: true,
+        durationMs: Date.now() - start,
+        message: "Restarted SurfaceFlinger compositor.",
+      };
+    } else {
+      try {
+        await this.executeRootCommand("setprop ctl.restart surfaceflinger; setprop ctl.restart zygote; setprop ctl.restart zygote_secondary", 15000, deviceId);
+      } catch {
+        await this.shell(["stop"], 10000, deviceId);
+        await this.shell(["start"], 10000, deviceId);
+      }
+      await new Promise((r) => setTimeout(r, 2000));
+      return {
+        service,
+        success: true,
+        durationMs: Date.now() - start,
+        message: "Soft-reboot completed. Android framework restarted without device hardware reboot.",
+      };
+    }
+  }
+
+  async manageSelinux(
+    action: "get" | "permissive" | "enforcing",
+    deviceId?: string
+  ): Promise<SelinuxResult> {
+    const prev = (await this.shell(["getenforce"], 5000, deviceId)).trim();
+
+    if (action === "get") {
+      return { mode: prev, success: true };
+    } else if (action === "permissive") {
+      await this.executeRootCommand("setenforce 0", 10000, deviceId);
+      const updated = (await this.shell(["getenforce"], 5000, deviceId)).trim();
+      return { mode: updated, success: updated.toLowerCase().includes("permissive"), previousMode: prev };
+    } else {
+      await this.executeRootCommand("setenforce 1", 10000, deviceId);
+      const updated = (await this.shell(["getenforce"], 5000, deviceId)).trim();
+      return { mode: updated, success: updated.toLowerCase().includes("enforcing"), previousMode: prev };
+    }
+  }
+
+  async listProcesses(
+    filter?: string,
+    limit = 50,
+    deviceId?: string
+  ): Promise<ProcessInfo[]> {
+    let out = "";
+    try {
+      out = await this.shell(["ps", "-A", "-o", "UID,PID,PPID,CMD"], 15000, deviceId);
+    } catch {
+      out = await this.shell(["ps", "-ef"], 15000, deviceId);
+    }
+
+    const lines = out.split(/\r?\n/).filter(Boolean);
+    const results: ProcessInfo[] = [];
+    if (lines.length < 2) return results;
+
+    const header = lines[0].trim().toUpperCase().split(/\s+/);
+    let uidIdx = header.findIndex((h) => h === "UID" || h === "USER");
+    let pidIdx = header.findIndex((h) => h === "PID");
+    let ppidIdx = header.findIndex((h) => h === "PPID");
+    let cmdIdx = header.findIndex((h) => h === "CMD" || h === "COMMAND" || h === "NAME");
+
+    if (uidIdx === -1) uidIdx = 0;
+    if (pidIdx === -1) pidIdx = 1;
+    if (ppidIdx === -1) ppidIdx = 2;
+    if (cmdIdx === -1) cmdIdx = 3;
+
+    for (let i = 1; i < lines.length; i++) {
+      const line = lines[i].trim();
+      if (!line) continue;
+      const parts = line.split(/\s+/);
+      if (parts.length > Math.max(uidIdx, pidIdx, ppidIdx)) {
+        const uid = parts[uidIdx] || "unknown";
+        const pid = parseInt(parts[pidIdx], 10);
+        const ppid = ppidIdx !== -1 && parts[ppidIdx] ? parseInt(parts[ppidIdx], 10) : 0;
+        const cmd = parts.slice(cmdIdx).join(" ") || parts[parts.length - 1];
+        if (!isNaN(pid)) {
+          if (filter && !cmd.toLowerCase().includes(filter.toLowerCase()) && !String(pid).includes(filter)) {
+            continue;
+          }
+          results.push({
+            uid,
+            pid,
+            ppid: isNaN(ppid) ? 0 : ppid,
+            cmd,
+            isRoot: uid === "0" || uid === "root",
+          });
+          if (results.length >= limit) break;
+        }
+      }
+    }
+
+    return results;
+  }
+
+  async setComponentEnabled(
+    component: string,
+    enabled: boolean,
+    useRoot = false,
+    deviceId?: string
+  ): Promise<{ component: string; enabled: boolean }> {
+    const cmd = ["pm", enabled ? "enable" : "disable", component];
+    if (useRoot) {
+      await this.executeRootCommand(`pm ${enabled ? "enable" : "disable"} ${component}`, 10000, deviceId);
+    } else {
+      const out = await this.shell(cmd, 10000, deviceId);
+      if (out.includes("Exception occurred") || out.includes("SecurityException")) {
+        throw new Error(`Failed to ${enabled ? "enable" : "disable"} ${component}: ${out.trim()}`);
+      }
+    }
+    return { component, enabled };
+  }
+
+  async getSystemProperty(name: string, deviceId?: string): Promise<string> {
+    const out = await this.shell(["getprop", name], 5000, deviceId);
+    return out.trim();
+  }
+
+  async setSystemProperty(
+    name: string,
+    value: string,
+    useRoot = false,
+    deviceId?: string
+  ): Promise<{ name: string; value: string }> {
+    if (useRoot) {
+      await this.executeRootCommand(`setprop ${name} '${value.replace(/'/g, "'\\''")}'`, 10000, deviceId);
+    } else {
+      await this.shell(["setprop", name, value], 10000, deviceId);
+    }
+    return { name, value };
   }
 
   async close(): Promise<void> {

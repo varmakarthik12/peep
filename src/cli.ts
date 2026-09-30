@@ -1182,4 +1182,244 @@ program
     }
   });
 
+// 27. peep kill <target>
+program
+  .command("kill <target>")
+  .description("Force stop an app, persistent daemon, or process by package, name, or PID (supports root kill)")
+  .option("--root", "Use root privileges (kill -9 via su/root adbd) for stubborn daemons", false)
+  .option("--no-matching", "Do not exterminate matching detached child processes", false)
+  .option("-p, --platform <platform>", "Target platform: android, browser, desktop, ios")
+  .option("--json", "Output result as JSON")
+  .action(async (targetArg: string, cmdOpts) => {
+    const { targetManager } = getTargetManagerAndConfig();
+    const target = await resolveAndInitTarget(targetManager, cmdOpts.platform as TargetPlatform, cmdOpts.json);
+
+    if (target instanceof AndroidTarget) {
+      const res = await target.forceStopProcess(targetArg, {
+        useRoot: cmdOpts.root,
+        killAllMatching: cmdOpts.matching !== false,
+      });
+      await targetManager.closeAll();
+      if (cmdOpts.json) console.log(JSON.stringify(res, null, 2));
+      else console.log(pc.green(`✓ [OK] ${res.message}`));
+    } else {
+      await targetManager.closeAll();
+      process.exit(1);
+    }
+  });
+
+// 28. peep restart <app>
+program
+  .command("restart <app>")
+  .description("Hot-restart an application (kill and relaunch) with startup crash verification")
+  .option("--root", "Use root kill to ensure all previous daemons are terminated", false)
+  .option("--reset", "Clear app data before relaunch", false)
+  .option("--no-wait", "Do not wait for initial activity launch to finish")
+  .option("-p, --platform <platform>", "Target platform: android, browser, desktop, ios")
+  .option("--json", "Output result as JSON")
+  .action(async (app: string, cmdOpts) => {
+    const { targetManager } = getTargetManagerAndConfig();
+    const target = await resolveAndInitTarget(targetManager, cmdOpts.platform as TargetPlatform, cmdOpts.json);
+
+    if (target instanceof AndroidTarget) {
+      try {
+        const res = await target.restartApp({
+          packageOrComponent: app,
+          useRootKill: cmdOpts.root,
+          resetState: cmdOpts.reset,
+          waitForLaunch: cmdOpts.wait,
+        });
+        await targetManager.closeAll();
+
+        if (cmdOpts.json) {
+          console.log(JSON.stringify({ status: res.crashDetected ? "CRASH_DETECTED" : "SUCCESS", ...res }, null, 2));
+        } else {
+          if (res.crashDetected) {
+            console.error(pc.red(`✗ [CRASH DETECTED] App ${app} crashed on restart: ${res.crashDetected}`));
+            process.exit(1);
+          } else {
+            console.log(pc.green(`✓ [OK] Restarted ${app} (${res.totalTimeMs || 0}ms)`));
+          }
+        }
+      } catch (err) {
+        await targetManager.closeAll();
+        console.error(pc.red(`✗ [FAIL] ${err instanceof Error ? err.message : String(err)}`));
+        process.exit(1);
+      }
+    } else {
+      await targetManager.closeAll();
+      process.exit(1);
+    }
+  });
+
+// 29. peep reload <service>
+program
+  .command("reload <service>")
+  .description("Reload system service without full reboot: zygote (LSPosed hooks), systemui, soft_reboot, surfaceflinger")
+  .option("-p, --platform <platform>", "Target platform: android, browser, desktop, ios")
+  .option("--json", "Output result as JSON")
+  .action(async (service: string, cmdOpts) => {
+    const valid = ["zygote", "systemui", "soft_reboot", "surfaceflinger"];
+    if (!valid.includes(service)) {
+      console.error(pc.red(`✗ Invalid service '${service}'. Must be one of: ${valid.join(", ")}`));
+      process.exit(1);
+    }
+    const { targetManager } = getTargetManagerAndConfig();
+    const target = await resolveAndInitTarget(targetManager, cmdOpts.platform as TargetPlatform, cmdOpts.json);
+
+    if (target instanceof AndroidTarget) {
+      const res = await target.restartSystemService(service as "zygote" | "systemui" | "soft_reboot" | "surfaceflinger");
+      await targetManager.closeAll();
+      if (cmdOpts.json) console.log(JSON.stringify(res, null, 2));
+      else console.log(pc.green(`✓ [OK] ${res.message} (${res.durationMs}ms)`));
+    } else {
+      await targetManager.closeAll();
+      process.exit(1);
+    }
+  });
+
+// 30. peep root <command>
+program
+  .command("root <command>")
+  .description("Execute shell command with root privileges (uid=0)")
+  .option("-t, --timeout <ms>", "Execution timeout in milliseconds", "15000")
+  .option("-p, --platform <platform>", "Target platform: android, browser, desktop, ios")
+  .option("--json", "Output result as JSON")
+  .action(async (command: string, cmdOpts) => {
+    const { targetManager } = getTargetManagerAndConfig();
+    const target = await resolveAndInitTarget(targetManager, cmdOpts.platform as TargetPlatform, cmdOpts.json);
+
+    if (target instanceof AndroidTarget) {
+      try {
+        const res = await target.executeRootCommand(command, parseInt(cmdOpts.timeout, 10));
+        await targetManager.closeAll();
+        if (cmdOpts.json) console.log(JSON.stringify(res, null, 2));
+        else console.log(res.stdout);
+      } catch (err) {
+        await targetManager.closeAll();
+        console.error(pc.red(`✗ [ROOT EXEC ERROR] ${err instanceof Error ? err.message : String(err)}`));
+        process.exit(1);
+      }
+    } else {
+      await targetManager.closeAll();
+      process.exit(1);
+    }
+  });
+
+// 31. peep selinux [action]
+program
+  .command("selinux [action]")
+  .description("Inspect or alter SELinux enforcement mode: get, permissive (setenforce 0), enforcing (setenforce 1)")
+  .option("-p, --platform <platform>", "Target platform: android, browser, desktop, ios")
+  .option("--json", "Output result as JSON")
+  .action(async (action: string | undefined, cmdOpts) => {
+    const act = (action || "get").toLowerCase() as "get" | "permissive" | "enforcing";
+    const { targetManager } = getTargetManagerAndConfig();
+    const target = await resolveAndInitTarget(targetManager, cmdOpts.platform as TargetPlatform, cmdOpts.json);
+
+    if (target instanceof AndroidTarget) {
+      const res = await target.manageSelinux(act);
+      await targetManager.closeAll();
+      if (cmdOpts.json) console.log(JSON.stringify(res, null, 2));
+      else console.log(pc.green(`✓ SELinux Mode: ${res.mode}${res.previousMode ? ` (was ${res.previousMode})` : ""}`));
+    } else {
+      await targetManager.closeAll();
+      process.exit(1);
+    }
+  });
+
+// 32. peep ps
+program
+  .command("ps")
+  .description("List active Linux/Android processes, PIDs, UIDs, and command lines")
+  .option("-f, --filter <str>", "Filter by process name, package, or PID")
+  .option("-n, --limit <num>", "Maximum processes to display", "50")
+  .option("-p, --platform <platform>", "Target platform: android, browser, desktop, ios")
+  .option("--json", "Output result as JSON")
+  .action(async (cmdOpts) => {
+    const { targetManager } = getTargetManagerAndConfig();
+    const target = await resolveAndInitTarget(targetManager, cmdOpts.platform as TargetPlatform, cmdOpts.json);
+
+    if (target instanceof AndroidTarget) {
+      const processes = await target.listProcesses(cmdOpts.filter, parseInt(cmdOpts.limit, 10));
+      await targetManager.closeAll();
+      if (cmdOpts.json) console.log(JSON.stringify(processes, null, 2));
+      else {
+        console.log(pc.bold(pc.cyan(`\nActive Processes (${processes.length} listed):\n`)));
+        const rows = processes.map((p) => [
+          String(p.pid),
+          String(p.ppid),
+          p.isRoot ? pc.red(p.uid) : p.uid,
+          p.cmd.length > 50 ? p.cmd.substring(0, 47) + "..." : p.cmd,
+        ]);
+        console.log(renderTable(["PID", "PPID", "UID", "Command"], rows));
+      }
+    } else {
+      await targetManager.closeAll();
+      process.exit(1);
+    }
+  });
+
+// 33. peep component <component> <state>
+program
+  .command("component <component> <state>")
+  .description("Enable or disable application component (pm enable/disable)")
+  .option("--root", "Execute as root", false)
+  .option("-p, --platform <platform>", "Target platform: android, browser, desktop, ios")
+  .option("--json", "Output result as JSON")
+  .action(async (component: string, state: string, cmdOpts) => {
+    const isEnable = state.toLowerCase() === "enable" || state === "1" || state.toLowerCase() === "true";
+    const { targetManager } = getTargetManagerAndConfig();
+    const target = await resolveAndInitTarget(targetManager, cmdOpts.platform as TargetPlatform, cmdOpts.json);
+
+    if (target instanceof AndroidTarget) {
+      const res = await target.setComponentEnabled(component, isEnable, cmdOpts.root);
+      await targetManager.closeAll();
+      if (cmdOpts.json) console.log(JSON.stringify(res, null, 2));
+      else console.log(pc.green(`✓ [OK] Component ${component} is now ${isEnable ? "enabled" : "disabled"}`));
+    } else {
+      await targetManager.closeAll();
+      process.exit(1);
+    }
+  });
+
+// 34. peep prop <action> <name> [value]
+program
+  .command("prop <action> <name> [value]")
+  .description("Get or set Android system properties (getprop / setprop)")
+  .option("--root", "Set property as root", false)
+  .option("-p, --platform <platform>", "Target platform: android, browser, desktop, ios")
+  .option("--json", "Output result as JSON")
+  .action(async (action: string, name: string, value: string | undefined, cmdOpts) => {
+    const { targetManager } = getTargetManagerAndConfig();
+    const target = await resolveAndInitTarget(targetManager, cmdOpts.platform as TargetPlatform, cmdOpts.json);
+
+    if (target instanceof AndroidTarget) {
+      if (action === "get") {
+        const val = await target.getSystemProperty(name);
+        await targetManager.closeAll();
+        if (cmdOpts.json) console.log(JSON.stringify({ name, value: val }));
+        else console.log(`${name} = ${pc.green(val)}`);
+      } else if (action === "set") {
+        if (value === undefined) {
+          console.error(pc.red("✗ Value argument required for 'set' action"));
+          await targetManager.closeAll();
+          process.exit(1);
+        }
+        await target.setSystemProperty(name, value, cmdOpts.root);
+        await targetManager.closeAll();
+        if (cmdOpts.json) console.log(JSON.stringify({ status: "SUCCESS", name, value }));
+        else console.log(pc.green(`✓ Set ${name} = ${value}`));
+      } else {
+        await targetManager.closeAll();
+        console.error(pc.red(`✗ Unknown action '${action}'. Use get or set.`));
+        process.exit(1);
+      }
+    } else {
+      await targetManager.closeAll();
+      process.exit(1);
+    }
+  });
+
 program.parse(process.argv);
+
